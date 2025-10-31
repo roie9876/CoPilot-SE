@@ -9,20 +9,15 @@
 
 ## Reporting a Vulnerability
 
-**IMPORTANT:** This is a Microsoft internal project. Do not report security vulnerabilities publicly.
+If you discover a security vulnerability, please report it responsibly:
 
-### Internal Reporting (Microsoft Employees)
+### Reporting Process
 
-1. **Immediate reporting required for:**
-   - Exposed API keys or credentials
-   - Authentication/authorization bypass
-   - Data leakage issues
-   - Injection vulnerabilities
+1. **DO NOT** report security vulnerabilities through public GitHub issues.
 
-2. **Report to:**
-   - **Security Team:** [security-team@microsoft.com]
-   - **Project Lead:** [Name]
-   - **Microsoft Security Response Center (MSRC):** If critical
+2. **Report via:**
+   - GitHub Security Advisories (preferred): Navigate to the Security tab
+   - Or email: [security contact email]
 
 3. **Include in report:**
    - Description of vulnerability
@@ -30,6 +25,12 @@
    - Potential impact
    - Affected versions
    - Suggested fix (if known)
+
+**Immediate reporting required for:**
+   - Exposed API keys or credentials
+   - Authentication/authorization bypass
+   - Data leakage issues
+   - Injection vulnerabilities
 
 ### Response Timeline
 
@@ -103,25 +104,24 @@ git secrets --scan
 
 ## Data Classification
 
-### Microsoft Confidential
-- Source code
-- Architecture documentation
+### Sensitive Data
 - API keys and credentials
-- Customer data (if any in POC)
+- User data (if any in POC)
+- Authentication tokens
 
 ### Handling Requirements
 
-- Do not share outside Microsoft
-- Do not store on personal devices
-- Use Microsoft-approved storage only
-- Delete after project completion (if required)
+- Never commit secrets to version control
+- Use environment variables or secure vaults
+- Encrypt sensitive data in transit and at rest
+- Implement proper access controls
 
 ## Compliance
 
-This POC follows Microsoft security policies:
-- Data residency: Sweden Central only
-- Authentication: Azure AD required
-- Audit logging: Application Insights
+Security best practices for this project:
+- Data residency considerations (configurable)
+- Authentication: Azure AD or configurable auth
+- Audit logging: Application Insights or equivalent
 - Encryption: In transit (HTTPS) and at rest
 
 ## Known Security Considerations (POC)
@@ -148,9 +148,8 @@ This POC follows Microsoft security policies:
 ## Contact
 
 For security concerns:
-- **Email:** copilot-se-security@microsoft.com
-- **Teams:** [Co-Pilot SE Security Channel]
-- **Urgent:** Contact project lead directly
+- Use GitHub Security Advisories
+- Or create a private issue for discussion
 
 ---
 

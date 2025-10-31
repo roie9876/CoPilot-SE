@@ -68,10 +68,10 @@ git add .
 # 4. Create initial commit
 git commit -m "Initial commit - Multi-Cloud POC v2.0.0"
 
-# 5. Create GitHub repository (web interface)
+# 4. Create GitHub repository (web interface)
 # Go to https://github.com/new
 # Repository name: copilot-se or CoPilot-SE
-# Visibility: Private (Microsoft Confidential)
+# Visibility: Public or Private (your choice)
 # DO NOT initialize with README, .gitignore, or license
 
 # 6. Add remote and push
@@ -175,7 +175,7 @@ You'll know the repository is ready when:
 - ✅ GitHub Actions workflows appear in the "Actions" tab
 - ✅ Documentation is readable on GitHub
 - ✅ No secrets or API keys are exposed
-- ✅ Repository is set to **Private** visibility
+- ✅ Repository visibility is set as desired (Public or Private)
 
 ## 🆘 Troubleshooting
 

@@ -90,9 +90,9 @@ Complete this checklist before pushing the Co-Pilot SE repository to GitHub.
 
 ## 🚀 GitHub Repository Settings
 
-- [ ] Repository visibility is set to **Private** (Microsoft Confidential)
+- [ ] Repository visibility is set as desired (Public or Private)
 - [ ] Repository description is accurate
-- [ ] Topics/tags are added (e.g., `azure`, `openai`, `multi-cloud`, `poc`)
+- [ ] Topics/tags are added (e.g., `azure`, `openai`, `multi-cloud`, `poc`, `ai-agents`)
 - [ ] Branch protection rules planned (optional for POC):
   - [ ] Require pull request reviews
   - [ ] Require status checks to pass (CI workflows)

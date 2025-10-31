@@ -262,7 +262,7 @@ All PRs require:
 
 ## 📜 License
 
-This project is proprietary to Microsoft Corporation. By contributing, you agree that your contributions will be licensed under the same terms.
+This project is licensed under the MIT License. By contributing, you agree that your contributions will be licensed under the same terms. See [LICENSE](LICENSE) for details.
 
 ---
 
