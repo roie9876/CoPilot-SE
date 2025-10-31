@@ -1,0 +1,52 @@
+name: MCP Server CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'mcp-server/**'
+      - '.github/workflows/mcp-server-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'mcp-server/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: mcp-server/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./mcp-server
+      run: npm ci
+    
+    - name: Lint
+      working-directory: ./mcp-server
+      run: npm run lint
+      continue-on-error: true  # Don't fail on lint errors for now
+    
+    - name: Format check
+      working-directory: ./mcp-server
+      run: npm run format -- --check
+      continue-on-error: true
+    
+    - name: Build
+      working-directory: ./mcp-server
+      run: npm run build
+    
+    - name: Run tests
+      working-directory: ./mcp-server
+      run: npm test
+      continue-on-error: true  # Tests not implemented yet
