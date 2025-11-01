@@ -4,7 +4,7 @@
 
 # Azure SDKs
 azure-identity==1.15.0
-azure-ai-openai==1.0.0
+# Note: Azure OpenAI uses the standard openai package (see LLM section below)
 azure-functions==1.18.0
 azure-core==1.29.5
 
@@ -19,6 +19,10 @@ azure-cognitiveservices-search-websearch==2.0.0
 requests==2.31.0
 httpx==0.25.2
 aiohttp==3.9.1
+
+# FastAPI for web API server
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
 
 # YouTube API
 google-api-python-client==2.108.0
