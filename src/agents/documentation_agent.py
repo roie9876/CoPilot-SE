@@ -3,13 +3,17 @@ Documentation Agent - Generates High-Level Design (HLD) documents with diagrams 
 
 This agent transforms the outputs from Requirements, Architecture, and Cost agents
 into professional HLD documentation suitable for stakeholders and implementation teams.
+
+REFACTORED: Now uses Agent Framework SDK with ChatAgent (no Bing needed)
 """
 
 import logging
 from datetime import datetime
 from typing import List, Optional
+import json
 
-from ..models.schemas import (
+from src.services.agent_framework_client import AgentFrameworkClient
+from src.models.schemas import (
     DocumentationInput,
     DocumentationOutput,
     DocumentMetadata,
@@ -22,14 +26,13 @@ from ..models.schemas import (
     ErrorType,
     CloudPlatform,
 )
-from .base_agent import BaseAgent
 
 
-class DocumentationAgent(BaseAgent):
+class DocumentationAgent:
     """
-    Agent responsible for generating comprehensive High-Level Design (HLD) documents.
+    Documentation generation agent using Agent Framework SDK.
     
-    Features:
+    Uses ChatAgent to generate:
     - Executive summary for stakeholders
     - Requirements documentation
     - Architecture diagrams (Mermaid format)
@@ -41,24 +44,207 @@ class DocumentationAgent(BaseAgent):
     """
 
     def __init__(self):
-        super().__init__("DocumentationAgent")
-        self.logger.info("DocumentationAgent initialized")
+        self.logger = logging.getLogger(__name__)
+        self.client = AgentFrameworkClient()
+        
+        self.instructions = """You are a Technical Documentation Agent specialized in cloud architecture documentation.
+
+**TASK:** Generate comprehensive High-Level Design (HLD) documentation from requirements, architecture, and cost data.
+
+**OUTPUT STRUCTURE:**
+
+# High-Level Design Document
+
+## 1. Executive Summary
+Brief overview for executives and stakeholders (2-3 paragraphs)
+
+## 2. Requirements
+- Functional Requirements
+- Non-Functional Requirements
+- Technical Constraints
+- Compliance Requirements
+
+## 3. Architecture Overview
+- System Architecture Description
+- Component Descriptions
+- Data Flow
+- Integration Points
+
+## 4. Service Selection Rationale
+For each service: why chosen, alternatives considered, key features
+
+## 5. Architecture Diagrams
+Mermaid diagrams showing system architecture
+
+## 6. Cost Breakdown
+- Monthly cost scenarios (low/medium/high)
+- Cost by category
+- Cost optimization recommendations
+
+## 7. Well-Architected Framework Analysis
+- Security
+- Reliability
+- Performance
+- Cost Optimization
+- Operational Excellence
+
+## 8. Deployment Considerations
+- Infrastructure as Code approach
+- CI/CD pipeline
+- Monitoring and observability
+- Backup and disaster recovery
+
+## 9. Next Steps
+Implementation roadmap and recommendations
+
+## 10. References
+Citations and documentation links
+
+**OUTPUT FORMAT: Return as JSON:**
+```json
+{
+  "hld_markdown": "Full markdown document...",
+  "executive_summary": "Executive summary text...",
+  "diagrams": [
+    {
+      "title": "System Architecture",
+      "format": "mermaid",
+      "content": "```mermaid\\n...```",
+      "description": "Description of diagram"
+    }
+  ],
+  "metadata": {
+    "title": "Document title",
+    "version": "1.0",
+    "date": "2025-11-01",
+    "author": "Co-Pilot SE",
+    "status": "draft"
+  }
+}
+```
+
+Make documentation professional and comprehensive."""
+        
+        self.agent = self.client.create_agent(
+            name="DocumentationAgent",
+            instructions=self.instructions,
+            enable_bing=False  # No web search needed for documentation
+        )
 
     async def process(self, input_data: DocumentationInput) -> DocumentationOutput:
         """
-        Generate comprehensive HLD documentation from agent outputs.
+        Generate HLD documentation using Agent Framework.
         
         Args:
             input_data: Documentation input containing all agent outputs
             
         Returns:
             DocumentationOutput with markdown HLD, diagrams, and metadata
-            
-        Raises:
-            AgentError: If documentation generation fails
         """
         try:
-            self.logger.info("Starting HLD document generation")
+            self.logger.info("Starting HLD document generation with Agent Framework")
+            
+            # Extract data from input (handle both dict and Pydantic model input)
+            if isinstance(input_data, dict):
+                requirements = input_data["requirements"]
+                architecture = input_data["architecture"]
+                costs = input_data["costs"]
+            else:
+                requirements = input_data.requirements
+                architecture = input_data.architecture
+                costs = input_data.costs
+            
+            # Build comprehensive prompt from all previous agent outputs
+            prompt = f"""Generate a High-Level Design document with the following information:
+
+**Requirements:**
+- Target Cloud: {requirements.target_cloud if hasattr(requirements, 'target_cloud') else requirements.get('target_cloud', 'N/A')}
+- Industry: {requirements.industry_vertical if hasattr(requirements, 'industry_vertical') else requirements.get('industry_vertical', 'N/A')}
+- Functional Requirements: {len(requirements.functional_requirements if hasattr(requirements, 'functional_requirements') else requirements.get('functional_requirements', []))} items
+- Compliance: {requirements.non_functional_requirements.compliance if hasattr(requirements, 'non_functional_requirements') else requirements.get('non_functional_requirements', {}).get('compliance', [])}
+
+**Architecture:**
+- Services: {len(architecture.services if hasattr(architecture, 'services') else architecture.get('services', []))} services selected
+- Region: {architecture.region if hasattr(architecture, 'region') else architecture.get('region', 'N/A')}
+
+**Cost Estimate:**
+- Low Usage: ${costs.total_monthly_cost_low if hasattr(costs, 'total_monthly_cost_low') else costs.get('total_monthly_cost_low', 0)}/month
+- Medium Usage: ${costs.total_monthly_cost_medium if hasattr(costs, 'total_monthly_cost_medium') else costs.get('total_monthly_cost_medium', 0)}/month
+- High Usage: ${costs.total_monthly_cost_high if hasattr(costs, 'total_monthly_cost_high') else costs.get('total_monthly_cost_high', 0)}/month
+
+Generate comprehensive HLD documentation in JSON format."""
+            
+            # Run agent
+            self.logger.info("Invoking Agent Framework ChatAgent for documentation")
+            result = await self.agent.run(prompt)
+            
+            if not result or not result.messages:
+                raise ValueError("Agent returned empty response")
+            
+            response = result.messages[-1].text
+            self.logger.info(f"Documentation response length: {len(response)} chars")
+            
+            # Parse JSON
+            json_str = response
+            if "```json" in response:
+                json_str = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                json_str = response.split("```")[1].split("```")[0].strip()
+            
+            try:
+                doc_data = json.loads(json_str)
+            except json.JSONDecodeError:
+                import re
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    doc_data = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("Could not parse JSON from agent response")
+            
+            # Extract required metadata fields
+            meta_data = doc_data.get("metadata", {})
+            target_cloud = requirements.target_cloud if hasattr(requirements, 'target_cloud') else requirements.get('target_cloud', CloudPlatform.AWS)
+            
+            # Create metadata with required fields
+            metadata = DocumentMetadata(
+                title=meta_data.get("title", f"{target_cloud} Architecture HLD"),
+                cloud_platform=target_cloud if isinstance(target_cloud, CloudPlatform) else CloudPlatform(target_cloud.lower()),
+                filename=meta_data.get("filename", f"hld-{target_cloud}-architecture.md"),
+                version=meta_data.get("version", "1.0"),
+                author=meta_data.get("author", "Co-Pilot SE v2.0")
+            )
+            
+            # Convert to DocumentationOutput  
+            hld_content = doc_data.get("hld_markdown", doc_data.get("content", "# High-Level Design\n\nNo content generated."))
+            
+            output = DocumentationOutput(
+                format="markdown",
+                content=hld_content,
+                metadata=metadata,
+                export_formats=["markdown", "pdf"]
+            )
+            
+            # Parse diagrams
+            diagrams = []
+            for i, diag_data in enumerate(doc_data.get("diagrams", [])):
+                title = diag_data.get("title", f"Diagram {i+1}")
+                diag = DiagramOutput(
+                    name=diag_data.get("name", title.lower().replace(" ", "-")),
+                    title=title,
+                    format=diag_data.get("format", "mermaid"),
+                    content=diag_data.get("content", ""),
+                    description=diag_data.get("description", "")
+                )
+                diagrams.append(diag)
+            
+            output.diagrams = diagrams
+            
+            self.logger.info("HLD documentation generated successfully")
+            return output
+            
+        except Exception as e:
+            self.logger.error(f"Error generating documentation: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to generate documentation: {str(e)}")
             
             # Validate and parse input
             validated_input = DocumentationInput(**input_data)

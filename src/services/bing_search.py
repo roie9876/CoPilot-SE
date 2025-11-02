@@ -1,7 +1,10 @@
 """
-Bing Search API Client - Online data retrieval for Co-Pilot SE.
+Azure AI Search Client (formerly Bing Search API) - Online data retrieval for Co-Pilot SE.
 
-This client provides access to Bing Search API for:
+IMPORTANT: Bing Search API has been migrated to Azure AI Services.
+Direct Bing Search endpoint is deprecated. Use Azure AI Foundry instead.
+
+This client provides access to Azure AI Search for:
 - Cloud service documentation
 - Pricing information
 - Best practices and tutorials
@@ -19,10 +22,13 @@ from ..models.schemas import Citation
 
 class BingSearchClient:
     """
-    Client for Bing Search API v7.0.
+    Client for Azure AI Search (formerly Bing Search API v7.0).
+    
+    NOTE: This client now uses Azure AI Foundry endpoint instead of direct Bing Search.
+    The legacy Bing Search API endpoint has been deprecated.
     
     Features:
-    - Web search with filtering
+    - Web search with filtering via Azure AI Services
     - Result ranking and relevance scoring
     - Citation extraction
     - Rate limiting and error handling
@@ -32,26 +38,45 @@ class BingSearchClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        endpoint: str = "https://api.bing.microsoft.com/v7.0/search",
+        endpoint: Optional[str] = None,
         results_per_page: int = 10,
     ):
         """
-        Initialize Bing Search client.
+        Initialize Azure AI Search client (formerly Bing Search).
         
         Args:
-            api_key: Bing Search API key (defaults to env var BING_SEARCH_API_KEY)
-            endpoint: Bing Search API endpoint (default: v7.0/search)
+            api_key: Azure AI Search API key (defaults to env var AZURE_AI_SEARCH_API_KEY)
+            endpoint: Azure AI Search endpoint (defaults to env var AZURE_AI_SEARCH_ENDPOINT)
             results_per_page: Number of results per page (default: 10, max: 50)
         """
         self.logger = logging.getLogger("BingSearchClient")
         
-        self.api_key = api_key or os.getenv("BING_SEARCH_API_KEY")
-        self.endpoint = endpoint
-        self.results_per_page = min(results_per_page, 50)  # Bing max is 50
+        # Try new Azure AI Search variables first, fall back to legacy Bing variables
+        self.api_key = (
+            api_key 
+            or os.getenv("AZURE_AI_SEARCH_API_KEY") 
+            or os.getenv("BING_SEARCH_API_KEY")
+        )
+        
+        self.endpoint = (
+            endpoint 
+            or os.getenv("AZURE_AI_SEARCH_ENDPOINT")
+            or os.getenv("BING_SEARCH_ENDPOINT", "https://api.bing.microsoft.com/v7.0/search")
+        )
+        
+        # If using Azure AI Foundry, append the search path
+        if "cognitiveservices.azure.com" in self.endpoint:
+            if not self.endpoint.endswith("/"):
+                self.endpoint += "/"
+            self.endpoint += "bing/v7.0/search"
+            self.logger.info("Using Azure AI Foundry endpoint for Bing Search")
+        
+        self.results_per_page = min(results_per_page, 50)  # Max is 50
         
         if not self.api_key:
             raise ValueError(
-                "Bing Search API key must be provided or set in environment variable BING_SEARCH_API_KEY"
+                "Azure AI Search API key must be provided or set in environment variable "
+                "AZURE_AI_SEARCH_API_KEY or BING_SEARCH_API_KEY"
             )
         
         # Request headers

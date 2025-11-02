@@ -19,13 +19,65 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
   const diagramRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (diagramRef.current && architecture.architecture_diagram) {
-      // Clear previous diagram
-      diagramRef.current.innerHTML = architecture.architecture_diagram;
-      
-      // Render mermaid diagram
-      mermaid.contentLoaded();
-    }
+    const renderDiagram = async () => {
+      if (diagramRef.current && architecture.architecture_diagram) {
+        // Clear previous content
+        diagramRef.current.innerHTML = '';
+        
+        // Strip markdown code fence if present (```mermaid ... ```)
+        let diagramCode = architecture.architecture_diagram.trim();
+        if (diagramCode.startsWith('```mermaid')) {
+          diagramCode = diagramCode.replace(/^```mermaid\n/, '').replace(/\n```$/, '');
+        } else if (diagramCode.startsWith('```')) {
+          diagramCode = diagramCode.replace(/^```\n/, '').replace(/\n```$/, '');
+        }
+        
+        // Fix common Mermaid syntax errors from backend
+        // 1. Add missing newlines between statements (e.g., "]B -->" should be "]\nB -->")
+        diagramCode = diagramCode.replace(/\]([A-Z][A-Z0-9]*)\s+(-->|---)/g, ']\n$1 $2');
+        
+        // 2. Fix unclosed brackets in node definitions
+        // Match patterns like "A --> B[Label text" without closing "]"
+        // This is a heuristic: if we see a newline after [ without ], add ]
+        const lines = diagramCode.split('\n');
+        const fixedLines = lines.map(line => {
+          // Check if line has [ but no matching ]
+          const openBrackets = (line.match(/\[/g) || []).length;
+          const closeBrackets = (line.match(/\]/g) || []).length;
+          if (openBrackets > closeBrackets) {
+            // Add missing closing brackets at the end of the line
+            return line + ']'.repeat(openBrackets - closeBrackets);
+          }
+          return line;
+        });
+        diagramCode = fixedLines.join('\n');
+        
+        try {
+          // Generate unique ID for this diagram
+          const id = `mermaid-${Date.now()}`;
+          
+          // Render mermaid diagram
+          const { svg } = await mermaid.render(id, diagramCode);
+          
+          // Insert rendered SVG
+          diagramRef.current.innerHTML = svg;
+        } catch (error) {
+          console.error('Mermaid rendering error:', error);
+          console.log('Original diagram code:', architecture.architecture_diagram);
+          console.log('Processed diagram code:', diagramCode);
+          // Fallback to showing a helpful error message and the code
+          diagramRef.current.innerHTML = `
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <p class="text-yellow-800 font-semibold mb-2">⚠️ Unable to render diagram</p>
+              <p class="text-yellow-700 text-sm">The backend generated invalid Mermaid syntax. Showing raw code below:</p>
+            </div>
+            <pre class="text-sm text-gray-800 bg-gray-100 p-4 rounded overflow-x-auto whitespace-pre-wrap">${diagramCode}</pre>
+          `;
+        }
+      }
+    };
+    
+    renderDiagram();
   }, [architecture.architecture_diagram]);
 
   return (
@@ -42,7 +94,7 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
           ref={diagramRef}
           className="mermaid bg-white dark:bg-gray-900 p-4 rounded-lg overflow-x-auto"
         />
-        {architecture.citations.length > 0 && (
+        {architecture.citations && architecture.citations.length > 0 && (
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             <p className="font-medium mb-2">References:</p>
             <ul className="list-disc list-inside space-y-1">
@@ -105,7 +157,7 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end space-x-1 text-green-600 dark:text-green-400 font-medium">
                       <DollarSign className="w-4 h-4" />
-                      <span>{service.estimated_monthly_cost.toFixed(2)}</span>
+                      <span>{service.estimated_monthly_cost != null ? service.estimated_monthly_cost.toFixed(2) : 'N/A'}</span>
                     </div>
                   </td>
                 </tr>
@@ -157,7 +209,7 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
               </div>
             </div>
             
-            {architecture.deployment_considerations.prerequisites.length > 0 && (
+            {architecture.deployment_considerations.prerequisites && architecture.deployment_considerations.prerequisites.length > 0 && (
               <div>
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400 block mb-2">Prerequisites:</span>
                 <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
@@ -168,7 +220,7 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
               </div>
             )}
             
-            {architecture.deployment_considerations.deployment_methods.length > 0 && (
+            {architecture.deployment_considerations.deployment_methods && architecture.deployment_considerations.deployment_methods.length > 0 && (
               <div>
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400 block mb-2">Deployment Methods:</span>
                 <div className="flex flex-wrap gap-2">

@@ -1,18 +1,21 @@
 """
-Architecture Agent - Designs Azure cloud architectures.
+Architecture Agent - Designs multi-cloud architectures.
 
 This agent:
-1. Analyzes requirements and selects appropriate Azure services
-2. Applies Azure Well-Architected Framework principles
+1. Analyzes requirements and selects appropriate cloud services
+2. Applies cloud best practices and well-architected frameworks
 3. Generates architecture diagrams (Mermaid syntax)
 4. Provides design rationale and trade-offs
 5. Considers security, scalability, and cost optimization
+
+REFACTORED: Now uses Agent Framework SDK with ChatAgent + Bing grounding
 """
 
 from typing import Dict, List, Optional
 import logging
+import json
 
-from src.agents.base_agent import BaseAgent
+from src.services.agent_framework_client import AgentFrameworkClient
 from src.models.schemas import (
     ArchitectureInput,
     ArchitectureOutput,
@@ -28,16 +31,16 @@ from src.models.schemas import (
 logger = logging.getLogger(__name__)
 
 
-class ArchitectureAgent(BaseAgent):
+class ArchitectureAgent:
     """
-    Azure architecture design agent.
+    Multi-cloud architecture design agent using Agent Framework SDK.
     
-    Follows Azure best practices:
-    - Managed Identity for authentication
-    - Encryption at rest and in transit
-    - Multi-AZ deployment for high availability
-    - Auto-scaling for performance
-    - Cost optimization with reserved instances
+    Uses ChatAgent with Bing grounding to:
+    - Research latest cloud services and best practices
+    - Select appropriate services for requirements
+    - Apply well-architected framework principles
+    - Generate architecture diagrams
+    - Provide citations from official documentation
     """
     
     # Azure service catalog by category
@@ -185,12 +188,134 @@ class ArchitectureAgent(BaseAgent):
     }
     
     def __init__(self):
-        """Initialize Architecture Agent."""
-        super().__init__(name="ArchitectureAgent")
+        """Initialize Architecture Agent with Agent Framework and Bing."""
+        self.logger = logging.getLogger(__name__)
+        self.client = AgentFrameworkClient()
+        
+        # System instructions for multi-cloud architecture design
+        self.instructions = """You are a Multi-Cloud Architecture Design Agent with expertise in AWS, Azure, GCP, and Oracle Cloud.
+
+Your task is to design cloud architectures based on customer requirements.
+
+**KEY RESPONSIBILITIES:**
+
+1. **Service Selection**: Choose appropriate cloud services for the target platform
+   - For AWS: EC2, Lambda, RDS, S3, ECS/EKS, etc.
+   - For Azure: App Service, Functions, SQL Database, Blob Storage, AKS, etc.
+   - For GCP: Compute Engine, Cloud Functions, Cloud SQL, Cloud Storage, GKE, etc.
+   - For Oracle: Compute, Autonomous Database, Object Storage, OKE, etc.
+
+2. **Best Practices**: Apply cloud well-architected framework principles
+   - Security: Encryption, IAM, network isolation
+   - Reliability: High availability, disaster recovery, multi-AZ
+   - Performance: Caching, CDN, auto-scaling
+   - Cost Optimization: Right-sizing, reserved instances, spot instances
+   - Operational Excellence: Monitoring, logging, automation
+
+3. **Architecture Diagram**: Generate Mermaid flowchart with STRICT syntax rules:
+   - User/client layer
+   - Edge/CDN layer (if needed)
+   - Load balancing layer
+   - Application layer
+   - Data layer
+   - Supporting services (monitoring, logging, caching)
+   
+   **CRITICAL MERMAID SYNTAX RULES:**
+   - Use `graph TD` for top-down or `graph LR` for left-right
+   - Each node MUST be on its own line
+   - Node format: `NodeID[Display Text]` - ALWAYS close brackets with `]`
+   - Connection format: `NodeA --> NodeB` - each on separate line
+   - For labels on arrows: `NodeA -->|Label| NodeB`
+   - Node IDs: Use ONLY letters/numbers, no spaces (e.g., `AppService` not `App Service`)
+   - Special chars in labels: Wrap in quotes if using parentheses (e.g., `AS1["App Service (Region 1)"]`)
+   - NEVER concatenate statements on same line (BAD: `]NodeB -->`, GOOD: `]\n    NodeB -->`)
+   
+   **EXAMPLE (CORRECT):**
+   ```mermaid
+   graph TD
+       Users[Users/Clients]
+       CDN[Azure Front Door]
+       AppService[Azure App Service]
+       DB[Azure SQL Database]
+       
+       Users --> CDN
+       CDN --> AppService
+       AppService --> DB
+   ```
+
+4. **Design Rationale**: Explain why each service was chosen
+
+5. **Trade-offs**: Identify alternatives and their pros/cons
+
+6. **Technology Stack**: Recommend programming languages and frameworks
+
+7. **Deployment Considerations**: Infrastructure as Code, CI/CD, monitoring
+
+8. **Citations**: ALWAYS provide URLs to official documentation for each service
+
+**USE BING SEARCH TO:**
+- Find latest cloud service documentation
+- Research pricing and SKU options
+- Verify service availability in regions
+- Check compliance certifications
+- Find best practice guides
+
+**OUTPUT JSON FORMAT:**
+```json
+{
+  "services": [
+    {
+      "name": "Service Name",
+      "category": "compute|storage|database|networking|security|monitoring",
+      "purpose": "What this service does in the architecture",
+      "sku": "Recommended SKU/tier",
+      "configuration": {"key": "value"},
+      "alternatives": ["Alternative 1", "Alternative 2"],
+      "rationale": "Why this service was chosen"
+    }
+  ],
+  "architecture_diagram": "```mermaid\\ngraph TD\\n    Users[Users/Clients]\\n    LB[Load Balancer]\\n    App[Application Server]\\n    DB[Database]\\n    \\n    Users --> LB\\n    LB --> App\\n    App --> DB\\n```",
+  "well_architected_analysis": {
+    "security": ["security measure 1", "security measure 2"],
+    "reliability": ["reliability measure 1"],
+    "performance": ["performance optimization 1"],
+    "cost_optimization": ["cost measure 1"],
+    "operational_excellence": ["ops measure 1"]
+  },
+  "deployment_considerations": {
+    "iac_tool": "Terraform|Bicep|CloudFormation",
+    "cicd_pipeline": "Description of CI/CD setup",
+    "monitoring_strategy": "Monitoring approach",
+    "backup_strategy": "Backup and DR approach"
+  },
+  "trade_offs": ["Trade-off 1", "Trade-off 2"],
+  "technology_stack": {
+    "backend": ["Python", "Node.js"],
+    "frontend": ["React"],
+    "infrastructure": ["Terraform"]
+  },
+  "citations": [
+    {
+      "title": "Service Documentation Title",
+      "url": "https://docs.cloud.com/...",
+      "relevance": "Why this citation is relevant"
+    }
+  ]
+}
+```
+
+Search for official documentation and provide accurate citations."""
+        
+        # Create agent with Bing grounding enabled
+        self.agent = self.client.create_agent(
+            name="ArchitectureAgent",
+            instructions=self.instructions,
+            enable_bing=True  # Enable web search for latest documentation
+        )
     
     async def process(self, input_data: Dict) -> Dict:
         """
-        Design Azure architecture based on requirements.
+        Design cloud architecture using Agent Framework with Bing research.
         
         Args:
             input_data: Dict with 'requirements', 'target_cloud', 'region'
@@ -198,41 +323,86 @@ class ArchitectureAgent(BaseAgent):
         Returns:
             ArchitectureOutput dict
         """
-        self._record_invocation()
-        
         try:
             # Validate input
             arch_input = ArchitectureInput(**input_data)
             
-            # Only process Azure (for now)
-            if arch_input.target_cloud != CloudPlatform.AZURE:
-                raise self._create_error(
-                    f"Only Azure is supported in current implementation. Got: {arch_input.target_cloud}",
-                    error_type=ErrorType.VALIDATION_ERROR,
-                    retryable=False
-                )
-            
-            self.logger.info(f"Designing Azure architecture for region: {arch_input.region}")
-            
-            # Select services based on requirements
-            services = self._select_azure_services(arch_input.requirements)
-            
-            # Generate architecture diagram
-            diagram = self._generate_mermaid_diagram(services, arch_input.requirements)
-            
-            # Apply Well-Architected Framework
-            well_architected = self._analyze_well_architected(services, arch_input.requirements)
-            
-            # Deployment considerations
-            deployment = self._get_deployment_considerations(
-                services, arch_input.requirements, arch_input.region
+            self.logger.info(
+                f"Designing {arch_input.target_cloud} architecture for region: {arch_input.region}"
             )
             
-            # Trade-offs
-            trade_offs = self._identify_trade_offs(services)
+            # Build comprehensive prompt
+            req = arch_input.requirements
+            prompt = f"""Design a cloud architecture for the following requirements:
+
+**Target Cloud Platform:** {arch_input.target_cloud}
+**Region:** {arch_input.region}
+
+**Functional Requirements:**
+{chr(10).join(f"- {r}" for r in req.functional_requirements)}
+
+**Non-Functional Requirements:**
+- Scalability: {req.non_functional_requirements.scalability}
+- Performance: {req.non_functional_requirements.performance}
+- Availability: {req.non_functional_requirements.availability}
+- Security: {req.non_functional_requirements.security}
+- Compliance: {req.non_functional_requirements.compliance}
+
+**Technical Constraints:**
+- Budget: {req.technical_constraints.budget}
+- Team Skills: {req.technical_constraints.team_skills}
+- Timeline: {req.technical_constraints.timeline}
+
+**Implied Requirements:**
+{chr(10).join(f"- {r}" for r in req.implied_requirements)}
+
+Use Bing search to find the latest service documentation, pricing, and best practices for {arch_input.target_cloud}.
+
+Design a complete architecture and provide the JSON response with all sections filled."""
             
-            # Technology stack
-            tech_stack = self._determine_tech_stack(arch_input.requirements)
+            # Run agent with Bing grounding
+            self.logger.info("Invoking Agent Framework ChatAgent with Bing grounding")
+            result = await self.agent.run(prompt)
+            
+            if not result or not result.messages:
+                raise ValueError("Agent returned empty response")
+            
+            # Extract response
+            response = result.messages[-1].text
+            self.logger.info(f"Agent response length: {len(response)} chars")
+            
+            # Parse JSON
+            json_str = response
+            if "```json" in response:
+                json_str = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                json_str = response.split("```")[1].split("```")[0].strip()
+            
+            try:
+                arch_data = json.loads(json_str)
+            except json.JSONDecodeError:
+                import re
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    arch_data = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("Could not parse JSON from agent response")
+            
+            # Convert to ArchitectureOutput
+            output = self._parse_architecture_response(arch_data, arch_input.target_cloud)
+            
+            # Set region with default if not provided
+            output.region = arch_input.region or self._get_default_region(arch_input.target_cloud)
+            
+            self.logger.info(
+                f"Architecture designed: {len(output.services)} services selected"
+            )
+            
+            return output
+        
+        except Exception as e:
+            self.logger.error(f"Error designing architecture: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to design architecture: {str(e)}")
             
             # Citations
             citations = self._generate_citations(services)
@@ -264,6 +434,116 @@ class ArchitectureAgent(BaseAgent):
                 retryable=True
             )
             raise error
+    
+    def _parse_architecture_response(self, arch_data: Dict, target_cloud: CloudPlatform) -> ArchitectureOutput:
+        """
+        Parse agent's JSON response into ArchitectureOutput.
+        
+        Args:
+            arch_data: Parsed JSON from agent
+            target_cloud: Target cloud platform
+            
+        Returns:
+            ArchitectureOutput instance
+        """
+        # Parse well-architected analysis
+        wa_data = arch_data.get("well_architected_analysis", {})
+        
+        # WellArchitectedAnalysis requires string fields, not lists
+        # Convert lists to comma-separated strings
+        def list_to_string(items):
+            if isinstance(items, list):
+                return ", ".join(str(i) for i in items)
+            return str(items) if items else "N/A"
+        
+        wa = WellArchitectedAnalysis(
+            operational_excellence=list_to_string(wa_data.get("operational_excellence", [])),
+            security=list_to_string(wa_data.get("security", [])),
+            reliability=list_to_string(wa_data.get("reliability", [])),
+            performance_efficiency=list_to_string(wa_data.get("performance", [])),
+            cost_optimization=list_to_string(wa_data.get("cost_optimization", []))
+        )
+        
+        # Parse services FIRST (needed for diagram validation)
+        services = []
+        for svc_data in arch_data.get("services", []):
+            svc = ServiceSelection(
+                service_name=svc_data.get("name", svc_data.get("service_name", "Unknown Service")),
+                category=svc_data.get("category", "other"),
+                rationale=svc_data.get("rationale", "Selected for this architecture"),
+                alternatives=svc_data.get("alternatives", [])
+            )
+            
+            services.append(svc)
+        
+        # Validate and potentially regenerate architecture diagram
+        llm_diagram = arch_data.get("architecture_diagram", "")
+        validated_diagram = self._validate_mermaid_diagram(llm_diagram, services)
+        
+        # Create output with required fields
+        output = ArchitectureOutput(
+            target_cloud=target_cloud,
+            architecture_summary=f"Architecture designed for {target_cloud}",
+            architecture_diagram=validated_diagram,
+            design_rationale=wa
+        )
+        
+        output.services = services
+        
+        # Deployment considerations
+        output.deployment_considerations = arch_data.get("deployment_considerations", {})
+        
+        # Trade-offs
+        output.trade_offs = arch_data.get("trade_offs", [])
+        
+        # Technology stack - convert dict to flat list if needed
+        tech_stack = arch_data.get("technology_stack", [])
+        if isinstance(tech_stack, dict):
+            # Flatten nested structure: {'backend': ['Python'], 'frontend': ['React']} → ['Python', 'React']
+            flat_list = []
+            for category_techs in tech_stack.values():
+                if isinstance(category_techs, list):
+                    flat_list.extend(category_techs)
+                else:
+                    flat_list.append(str(category_techs))
+            output.technology_stack = flat_list
+        elif isinstance(tech_stack, list):
+            output.technology_stack = tech_stack
+        else:
+            output.technology_stack = []
+        
+        # Citations
+        citations = []
+        for cit_data in arch_data.get("citations", []):
+            cit = Citation(
+                title=cit_data.get("title", ""),
+                url=cit_data.get("url", ""),
+                source=cit_data.get("source", "web_search"),
+                relevance=cit_data.get("relevance", "")
+            )
+            citations.append(cit)
+        
+        output.citations = citations
+        
+        return output
+    
+    def _get_default_region(self, cloud_platform: CloudPlatform) -> str:
+        """
+        Get default region for a cloud platform.
+        
+        Args:
+            cloud_platform: Target cloud platform
+            
+        Returns:
+            Default region string
+        """
+        defaults = {
+            CloudPlatform.AWS: "us-east-1",
+            CloudPlatform.AZURE: "eastus",
+            CloudPlatform.GCP: "us-central1",
+            CloudPlatform.ORACLE: "us-ashburn-1"
+        }
+        return defaults.get(cloud_platform, "us-east-1")
     
     def _select_azure_services(
         self, requirements: RequirementsOutput
@@ -613,6 +893,87 @@ class ArchitectureAgent(BaseAgent):
         security = requirements.non_functional_requirements.security
         compliance = requirements.non_functional_requirements.compliance
         return bool(security or compliance)
+    
+    def _validate_mermaid_diagram(
+        self, llm_diagram: str, services: List[ServiceSelection]
+    ) -> str:
+        """
+        Validate LLM-generated Mermaid diagram and fix/regenerate if invalid.
+        
+        Args:
+            llm_diagram: Diagram from LLM
+            services: List of services
+            
+        Returns:
+            Valid Mermaid diagram string
+        """
+        if not llm_diagram or not llm_diagram.strip():
+            self.logger.warning("Empty diagram from LLM, generating Python fallback")
+            # Use the requirements from context if available
+            return self._generate_simple_diagram(services)
+        
+        # Strip markdown code fence
+        diagram_code = llm_diagram.strip()
+        if diagram_code.startswith("```mermaid"):
+            diagram_code = diagram_code.replace("```mermaid\n", "").replace("\n```", "")
+        elif diagram_code.startswith("```"):
+            diagram_code = diagram_code.replace("```\n", "").replace("\n```", "")
+        
+        # Check for common syntax errors
+        has_errors = False
+        
+        # Check 1: Unclosed brackets
+        for line in diagram_code.split('\n'):
+            open_brackets = line.count('[')
+            close_brackets = line.count(']')
+            if open_brackets > close_brackets:
+                self.logger.warning(f"Found unclosed bracket in line: {line[:50]}")
+                has_errors = True
+                break
+        
+        # Check 2: Missing newlines (concatenated statements)
+        if '][' in diagram_code and ']\n' not in diagram_code.replace('][', ']\n['):
+            self.logger.warning("Found concatenated statements without newlines")
+            has_errors = True
+        
+        # Check 3: Must start with graph declaration
+        if not diagram_code.startswith('graph '):
+            self.logger.warning("Missing graph declaration")
+            has_errors = True
+        
+        if has_errors:
+            self.logger.warning("LLM diagram has syntax errors, using Python fallback")
+            return self._generate_simple_diagram(services)
+        
+        # Return validated diagram with code fence
+        return f"```mermaid\n{diagram_code}\n```"
+    
+    def _generate_simple_diagram(self, services: List[ServiceSelection]) -> str:
+        """
+        Generate simple, guaranteed-valid Mermaid diagram.
+        
+        Args:
+            services: List of services
+            
+        Returns:
+            Mermaid diagram string with code fence
+        """
+        diagram = "graph TD\n"
+        diagram += "    Users[Users/Clients]\n"
+        
+        # Create nodes for each service
+        for i, svc in enumerate(services[:8]):  # Limit to 8 services for clarity
+            node_id = f"S{i+1}"
+            # Escape special characters in service names
+            safe_name = svc.service_name.replace('"', "'")
+            diagram += f'    {node_id}["{safe_name}"]\n'
+        
+        # Create connections (simple linear flow)
+        diagram += "    Users --> S1\n"
+        for i in range(1, min(len(services), 8)):
+            diagram += f"    S{i} --> S{i+1}\n"
+        
+        return f"```mermaid\n{diagram}```"
     
     def _generate_mermaid_diagram(
         self, services: List[ServiceSelection], requirements: RequirementsOutput

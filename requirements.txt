@@ -8,12 +8,13 @@ azure-identity==1.15.0
 azure-functions==1.18.0
 azure-core==1.29.5
 
-# Microsoft Agent Framework
-# Note: Replace with actual package when available
-# microsoft-agent-framework==1.0.0
+# Azure Agent Framework SDK (Modern unified framework - replaces azure-ai-projects)
+# Combines Semantic Kernel + AutoGen patterns
+agent-framework[azure]==1.0.0b251028
+azure-ai-inference==1.0.0b7
 
-# Bing Search API
-azure-cognitiveservices-search-websearch==2.0.0
+# Bing Search API (DEPRECATED - removed in favor of Azure AI Agent Service)
+# azure-cognitiveservices-search-websearch==2.0.0
 
 # HTTP and API clients
 requests==2.31.0

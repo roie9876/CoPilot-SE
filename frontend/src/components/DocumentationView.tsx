@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FileText, Download, Copy, Check } from 'lucide-react';
 import type { DocumentationOutput } from '../types';
+import './DocumentationView.css';
 
 interface DocumentationViewProps {
   documentation: DocumentationOutput;
@@ -90,7 +91,26 @@ export default function DocumentationView({ documentation }: DocumentationViewPr
 
       {/* Markdown Content */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8">
-        <div className="prose prose-lg dark:prose-invert max-w-none">
+        <div className="documentation-content prose prose-lg dark:prose-invert max-w-none 
+                        prose-headings:font-bold prose-headings:text-gray-900 dark:prose-headings:text-white
+                        prose-h1:text-3xl prose-h1:mb-6 prose-h1:mt-8 prose-h1:border-b prose-h1:pb-3
+                        prose-h2:text-2xl prose-h2:mb-4 prose-h2:mt-6
+                        prose-h3:text-xl prose-h3:mb-3 prose-h3:mt-5
+                        prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-p:leading-relaxed prose-p:mb-4
+                        prose-ul:my-4 prose-ul:space-y-2 prose-li:text-gray-700 dark:prose-li:text-gray-300
+                        prose-ol:my-4 prose-ol:space-y-2
+                        prose-strong:text-gray-900 dark:prose-strong:text-white prose-strong:font-semibold
+                        prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-900 
+                        prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+                        prose-pre:bg-gray-900 dark:prose-pre:bg-black prose-pre:text-gray-100 
+                        prose-pre:p-4 prose-pre:rounded-lg prose-pre:overflow-x-auto
+                        prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+                        prose-blockquote:border-l-4 prose-blockquote:border-blue-600 prose-blockquote:pl-4 
+                        prose-blockquote:italic prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400
+                        prose-table:border-collapse prose-table:w-full
+                        prose-th:bg-gray-100 dark:prose-th:bg-gray-700 prose-th:p-3 prose-th:text-left
+                        prose-td:border prose-td:border-gray-300 dark:prose-td:border-gray-600 prose-td:p-3
+                        prose-img:rounded-lg prose-img:shadow-md">
           <ReactMarkdown>{documentation.content}</ReactMarkdown>
         </div>
       </div>

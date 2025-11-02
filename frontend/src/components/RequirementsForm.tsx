@@ -36,55 +36,60 @@ export default function RequirementsForm({ onSubmit, loading }: RequirementsForm
         </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="requirements" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             What cloud architecture do you need?
           </label>
           <textarea
             id="requirements"
-            rows={8}
+            rows={5}
             value={requirements}
             onChange={(e) => setRequirements(e.target.value)}
-            placeholder="Example: Design an Azure e-commerce platform for a retail company supporting 50,000 concurrent users with product catalog, shopping cart, payment processing, and order tracking. Requires 99.9% uptime, PCI DSS compliance, and auto-scaling. Budget: $5,000-10,000/month."
+            placeholder="Example: Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget"
             className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             required
             minLength={10}
           />
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Minimum 10 characters. Include cloud platform (Azure/AWS/GCP/Oracle), requirements, constraints, and budget.
           </p>
         </div>
 
-        {/* Example Prompts */}
-        <div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+        {/* Submit Button - Moved Above Examples */}
+        <div className="flex justify-center pt-2">
+          <button
+            type="submit"
+            disabled={loading || requirements.trim().length < 10}
+            style={{
+              backgroundColor: loading || requirements.trim().length < 10 ? '#d1d5db' : '#2563eb',
+              color: loading || requirements.trim().length < 10 ? '#6b7280' : '#ffffff',
+              cursor: loading || requirements.trim().length < 10 ? 'not-allowed' : 'pointer',
+            }}
+            className="px-8 py-3 rounded-lg transition shadow-lg flex items-center space-x-2 text-lg font-semibold hover:opacity-90"
+          >
+            <Send className="w-5 h-5" />
+            <span>Generate Architecture</span>
+          </button>
+        </div>
+
+        {/* Example Prompts - Moved Below Button */}
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Or try an example:
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {EXAMPLE_PROMPTS.map((example, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => handleExampleClick(example)}
-                className="text-left px-4 py-3 text-sm bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
+                className="text-left px-3 py-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition"
               >
                 {example}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Submit Button */}
-        <div className="flex justify-center">
-          <button
-            type="submit"
-            disabled={loading || requirements.trim().length < 10}
-            className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-lg flex items-center space-x-2 text-lg font-semibold"
-          >
-            <Send className="w-5 h-5" />
-            <span>Generate Architecture</span>
-          </button>
         </div>
       </form>
     </div>

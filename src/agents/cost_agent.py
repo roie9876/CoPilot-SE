@@ -1,18 +1,21 @@
 """
-Cost Agent - Estimates Azure infrastructure costs.
+Cost Agent - Estimates multi-cloud infrastructure costs.
 
 This agent:
 1. Analyzes architecture design and calculates costs
 2. Provides low/medium/high usage scenarios
 3. Generates cost optimization recommendations
-4. Uses deterministic pricing data (no cloud provider auth needed for POC)
+4. Uses Bing search to find latest pricing information
+
+REFACTORED: Now uses Agent Framework SDK with ChatAgent + Bing grounding
 """
 
 from typing import Dict, List
 import logging
 from datetime import datetime
+import json
 
-from src.agents.base_agent import BaseAgent
+from src.services.agent_framework_client import AgentFrameworkClient
 from src.models.schemas import (
     CostInput,
     CostOutput,
@@ -28,12 +31,15 @@ from src.models.schemas import (
 logger = logging.getLogger(__name__)
 
 
-class CostAgent(BaseAgent):
+class CostAgent:
     """
-    Azure cost estimation agent.
+    Multi-cloud cost estimation agent using Agent Framework SDK.
     
-    Provides ±30% accuracy for POC using public pricing data.
-    For production, integrate with Azure Pricing API or Cost Management API.
+    Uses ChatAgent with Bing grounding to:
+    - Research latest pricing from cloud provider websites
+    - Calculate costs for low/medium/high usage scenarios
+    - Generate cost optimization recommendations
+    - Provide ±30% accuracy for POC
     """
     
     # Azure pricing data (East US region, Pay-As-You-Go rates, November 2025)
@@ -171,12 +177,86 @@ class CostAgent(BaseAgent):
     }
     
     def __init__(self):
-        """Initialize Cost Agent."""
-        super().__init__(name="CostAgent")
+        """Initialize Cost Agent with Agent Framework and Bing."""
+        self.logger = logging.getLogger(__name__)
+        self.client = AgentFrameworkClient()
+        
+        self.instructions = """You are a Cloud Cost Estimation Agent specializing in AWS, Azure, GCP, and Oracle Cloud pricing.
+
+**TASK:** Estimate monthly infrastructure costs based on architecture design.
+
+**USE BING SEARCH TO:**
+- Find latest pricing from official cloud provider pricing pages
+- Search for pricing calculators
+- Find reserved instance / savings plan pricing
+- Research free tier limits
+
+**PROVIDE THREE SCENARIOS:**
+1. **Low Usage**: Minimal load, development/testing
+2. **Medium Usage**: Expected production load
+3. **High Usage**: Peak load with growth buffer
+
+**OUTPUT JSON FORMAT:**
+```json
+{
+  "service_costs": [
+    {
+      "service_name": "Service Name",
+      "category": "compute|storage|database|networking",
+      "sku": "SKU/tier used",
+      "low_usage_monthly": 100.00,
+      "medium_usage_monthly": 300.00,
+      "high_usage_monthly": 800.00,
+      "usage_assumptions": {
+        "low": "assumptions for low",
+        "medium": "assumptions for medium",
+        "high": "assumptions for high"
+      }
+    }
+  ],
+  "total_monthly_cost_low": 500.00,
+  "total_monthly_cost_medium": 1500.00,
+  "total_monthly_cost_high": 4000.00,
+  "cost_by_category": {
+    "compute": 800.00,
+    "storage": 200.00,
+    "database": 500.00
+  },
+  "cost_optimization_recommendations": [
+    {
+      "category": "Reserved Instances",
+      "recommendation": "Purchase 1-year reserved instances",
+      "estimated_savings_monthly": 200.00,
+      "implementation_effort": "low|medium|high"
+    }
+  ],
+  "assumptions": {
+    "region": "Region used for pricing",
+    "currency": "USD",
+    "billing_model": "pay-as-you-go",
+    "discounts_applied": []
+  },
+  "sources": [
+    {
+      "title": "Pricing page title",
+      "url": "https://...",
+      "relevance": "Why this source was used"
+    }
+  ]
+}
+```
+
+Be accurate with pricing. Always cite sources."""
+        
+        self.agent = self.client.create_agent(
+            name="CostAgent",
+            instructions=self.instructions,
+            enable_bing=True  # Enable for pricing research
+        )
     
     async def process(self, input_data: Dict) -> Dict:
         """
-        Estimate costs for Azure architecture.
+        Estimate costs using Agent Framework with Bing pricing research.
         
         Args:
             input_data: Dict with 'architecture', 'target_cloud', 'region', 'usage_profile'
@@ -184,70 +264,76 @@ class CostAgent(BaseAgent):
         Returns:
             CostOutput dict
         """
-        self._record_invocation()
-        
         try:
             # Validate input
             cost_input = CostInput(**input_data)
             
-            # Only process Azure (for now)
-            if cost_input.target_cloud != CloudPlatform.AZURE:
-                raise self._create_error(
-                    f"Only Azure is supported in current implementation. Got: {cost_input.target_cloud}",
-                    error_type=ErrorType.VALIDATION_ERROR,
-                    retryable=False
-                )
-            
-            self.logger.info(f"Estimating costs for {len(cost_input.architecture.services)} Azure services")
-            
-            # Calculate costs for each service
-            service_costs = []
-            for service in cost_input.architecture.services:
-                # Convert ServiceSelection model to dict for cost calculation
-                service_dict = service.model_dump() if hasattr(service, 'model_dump') else service
-                cost = self._calculate_service_cost(
-                    service_dict,
-                    cost_input.usage_profile
-                )
-                if cost:
-                    service_costs.append(cost)
-            
-            # Calculate totals
-            total_low = sum(sc.low_usage_monthly for sc in service_costs)
-            total_medium = sum(sc.medium_usage_monthly for sc in service_costs)
-            total_high = sum(sc.high_usage_monthly for sc in service_costs)
-            
-            # Group by category
-            cost_by_category = self._group_by_category(service_costs)
-            
-            # Generate optimization recommendations
-            optimizations = self._generate_optimizations(
-                service_costs,
-                cost_input.architecture.services
+            self.logger.info(
+                f"Estimating costs for {len(cost_input.architecture.services)} services "
+                f"on {cost_input.target_cloud}"
             )
             
-            # Generate assumptions
-            assumptions = self._generate_assumptions(cost_input.usage_profile)
+            # Build prompt with architecture details
+            services_desc = "\n".join([
+                f"- {s.service_name} ({s.category}): {s.rationale}"
+                for s in cost_input.architecture.services
+            ])
             
-            # Generate citations
-            citations = self._generate_pricing_citations()
+            prompt = f"""Estimate monthly costs for this cloud architecture:
+
+**Cloud Platform:** {cost_input.target_cloud}
+**Region:** {cost_input.region}
+
+**Services to Estimate:**
+{services_desc}
+
+**Usage Profile:** {cost_input.usage_profile}
+
+Use Bing search to find the latest pricing for {cost_input.target_cloud} in region {cost_input.region}.
+
+Calculate costs for low, medium, and high usage scenarios.
+Include cost optimization recommendations.
+Provide citations to official pricing pages."""
             
-            # Build output
-            output = CostOutput(
-                target_cloud=CloudPlatform.AZURE,
-                region=cost_input.region,
-                currency="USD",
-                time_period="monthly",
-                service_costs=service_costs,
-                total_monthly_cost_low=round(total_low, 2),
-                total_monthly_cost_medium=round(total_medium, 2),
-                total_monthly_cost_high=round(total_high, 2),
-                cost_by_category=cost_by_category,
-                cost_optimization_recommendations=optimizations,
-                assumptions=assumptions,
-                confidence_level="medium",
-                sources=citations
+            # Run agent with Bing grounding
+            self.logger.info("Invoking Agent Framework ChatAgent with Bing for pricing research")
+            result = await self.agent.run(prompt)
+            
+            if not result or not result.messages:
+                raise ValueError("Agent returned empty response")
+            
+            response = result.messages[-1].text
+            self.logger.info(f"Cost estimation response length: {len(response)} chars")
+            
+            # Parse JSON
+            json_str = response
+            if "```json" in response:
+                json_str = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                json_str = response.split("```")[1].split("```")[0].strip()
+            
+            try:
+                cost_data = json.loads(json_str)
+            except json.JSONDecodeError:
+                import re
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    cost_data = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("Could not parse JSON from agent response")
+            
+            # Convert to CostOutput
+            output = self._parse_cost_response(cost_data, cost_input)
+            
+            self.logger.info(
+                f"Cost estimated: ${output.total_monthly_cost_low}-${output.total_monthly_cost_high}/month"
             )
+            
+            return output
+        
+        except Exception as e:
+            self.logger.error(f"Error estimating costs: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to estimate costs: {str(e)}")
             
             self.logger.info(
                 f"Cost estimation complete: Low=${total_low:.2f}, "
@@ -264,6 +350,101 @@ class CostAgent(BaseAgent):
                 retryable=True
             )
             raise error
+    
+    def _parse_cost_response(self, cost_data: Dict, cost_input: CostInput) -> CostOutput:
+        """
+        Parse agent's JSON response into CostOutput.
+        
+        Args:
+            cost_data: Parsed JSON from agent
+            cost_input: Original input
+            
+        Returns:
+            CostOutput instance
+        """
+        # Create output with required fields
+        output = CostOutput(
+            target_cloud=cost_input.target_cloud,
+            region=cost_input.region
+        )
+        
+        # Basic info
+        output.currency = cost_data.get("assumptions", {}).get("currency", "USD")
+        output.time_period = "monthly"
+        
+        # Service costs
+        service_costs = []
+        for sc_data in cost_data.get("service_costs", []):
+            # Parse usage assumptions
+            usage_data = sc_data.get("usage_assumptions", {})
+            if isinstance(usage_data, dict) and not isinstance(usage_data, UsageAssumptions):
+                # Convert dict to UsageAssumptions, handling nested structures
+                usage_assumptions = UsageAssumptions()
+                for key in ['hours_per_month', 'requests_per_second', 'storage_gb', 'data_transfer_gb']:
+                    if key in usage_data:
+                        setattr(usage_assumptions, key, usage_data[key])
+                # Store everything else in additional_metrics
+                usage_assumptions.additional_metrics = {
+                    k: v for k, v in usage_data.items()
+                    if k not in ['hours_per_month', 'requests_per_second', 'storage_gb', 'data_transfer_gb']
+                }
+            else:
+                usage_assumptions = UsageAssumptions()
+            
+            sc = ServiceCost(
+                service_name=sc_data.get("service_name", "Unknown"),
+                category=sc_data.get("category", "other"),
+                pricing_model=sc_data.get("pricing_model", "monthly"),
+                low_usage_monthly=sc_data.get("low_usage_monthly", 0.0),
+                medium_usage_monthly=sc_data.get("medium_usage_monthly", 0.0),
+                high_usage_monthly=sc_data.get("high_usage_monthly", 0.0),
+                assumptions=usage_assumptions,
+                pricing_tier=sc_data.get("pricing_tier", ""),
+                pricing_url=sc_data.get("pricing_url", "")
+            )
+            service_costs.append(sc)
+        
+        output.service_costs = service_costs
+        
+        # Totals
+        output.total_monthly_cost_low = cost_data.get("total_monthly_cost_low", 0.0)
+        output.total_monthly_cost_medium = cost_data.get("total_monthly_cost_medium", 0.0)
+        output.total_monthly_cost_high = cost_data.get("total_monthly_cost_high", 0.0)
+        
+        # Cost by category
+        output.cost_by_category = cost_data.get("cost_by_category", {})
+        
+        # Optimizations
+        optimizations = []
+        for opt_data in cost_data.get("cost_optimization_recommendations", []):
+            opt = CostOptimization(
+                category=opt_data.get("category", ""),
+                recommendation=opt_data.get("recommendation", ""),
+                estimated_savings_monthly=opt_data.get("estimated_savings_monthly", 0.0),
+                implementation_effort=opt_data.get("implementation_effort", "medium")
+            )
+            optimizations.append(opt)
+        
+        output.cost_optimization_recommendations = optimizations
+        
+        # Assumptions
+        output.assumptions = cost_data.get("assumptions", {})
+        output.confidence_level = "medium"
+        
+        # Citations
+        citations = []
+        for cit_data in cost_data.get("sources", []):
+            cit = Citation(
+                title=cit_data.get("title", ""),
+                url=cit_data.get("url", ""),
+                source="web_search",
+                relevance=cit_data.get("relevance", "")
+            )
+            citations.append(cit)
+        
+        output.sources = citations
+        
+        return output
     
     def _calculate_service_cost(
         self,

@@ -4,7 +4,7 @@ import RequirementsForm from './components/RequirementsForm';
 import ArchitectureView from './components/ArchitectureView';
 import CostView from './components/CostView';
 import DocumentationView from './components/DocumentationView';
-import { OrchestratorOutput } from './types';
+import type { OrchestratorOutput } from './types';
 import { generateArchitecture } from './api/client';
 import './App.css';
 
@@ -15,24 +15,30 @@ function App() {
   const [activeTab, setActiveTab] = useState<'architecture' | 'cost' | 'documentation'>('architecture');
 
   const handleSubmit = async (requirements: string) => {
+    console.log('handleSubmit called with:', requirements);
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
+      console.log('Calling generateArchitecture...');
       const data = await generateArchitecture(requirements);
+      console.log('Received data:', data);
       setResult(data);
+      console.log('Result set successfully');
     } catch (err) {
+      console.error('Error in handleSubmit:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate architecture');
     } finally {
       setLoading(false);
+      console.log('Loading set to false');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)' }}>
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-md">
+      <header className="bg-white shadow-md" style={{ backgroundColor: 'white' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center space-x-3">
             <Cloud className="w-10 h-10 text-blue-600" />

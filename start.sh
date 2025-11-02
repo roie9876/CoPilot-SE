@@ -45,11 +45,17 @@ echo "   Logs: api_server.log"
 
 # Wait for backend to start
 echo "   Waiting for backend to start..."
-sleep 3
+for i in {1..10}; do
+    sleep 1
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        break
+    fi
+done
 
 # Check if backend is running
-if ! curl -s http://localhost:8000/health > /dev/null; then
+if ! curl -s http://localhost:8000/health > /dev/null 2>&1; then
     echo "❌ Backend failed to start"
+    echo "   Check api_server.log for details"
     kill $BACKEND_PID 2>/dev/null || true
     exit 1
 fi
@@ -57,9 +63,9 @@ fi
 echo "✅ Backend is running"
 echo ""
 
-# Start frontend development server
+# Start frontend development server with Node.js 22
 echo "🎨 Starting Frontend Development Server..."
-(cd frontend && npm run dev) > frontend.log 2>&1 &
+(cd frontend && source ~/.nvm/nvm.sh && nvm use 22 && npm run dev) > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "   Frontend PID: $FRONTEND_PID"
 echo "   Frontend URL: http://localhost:5173"

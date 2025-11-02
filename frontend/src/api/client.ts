@@ -18,7 +18,7 @@ const apiClient = axios.create({
 export async function generateArchitecture(requirements: string): Promise<OrchestratorOutput> {
   try {
     const response = await apiClient.post<OrchestratorOutput>('/api/generate', {
-      user_input: requirements,
+      requirements: requirements,
     });
     
     return response.data;

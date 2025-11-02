@@ -7,13 +7,16 @@ This agent:
 3. Identifies industry vertical
 4. Extracts functional/non-functional requirements
 5. Detects ambiguities and asks clarifying questions
+
+REFACTORED: Now uses Agent Framework SDK with ChatAgent
 """
 
 from typing import Dict, List, Optional
 import re
 import logging
+import json
 
-from src.agents.base_agent import BaseAgent
+from src.services.agent_framework_client import AgentFrameworkClient
 from src.models.schemas import (
     RequirementsInput,
     RequirementsOutput,
@@ -28,11 +31,11 @@ from src.models.schemas import (
 logger = logging.getLogger(__name__)
 
 
-class RequirementsAgent(BaseAgent):
+class RequirementsAgent:
     """
-    Requirements extraction agent.
+    Requirements extraction agent using Agent Framework SDK.
     
-    Uses chain-of-thought reasoning to:
+    Uses ChatAgent with chain-of-thought reasoning to:
     - Understand user intent
     - Extract requirements
     - Detect target cloud platform
@@ -119,12 +122,86 @@ class RequirementsAgent(BaseAgent):
     }
     
     def __init__(self):
-        """Initialize Requirements Agent."""
-        super().__init__(name="RequirementsAgent")
+        """Initialize Requirements Agent with Agent Framework."""
+        self.logger = logging.getLogger(__name__)
+        self.client = AgentFrameworkClient()
+        
+        # System instructions for the agent
+        self.instructions = """You are a Requirements Extraction Agent for cloud solution architecture.
+
+Your task is to analyze customer requests and extract structured requirements.
+
+EXTRACT THE FOLLOWING:
+
+1. **Target Cloud Platform**: AWS, Azure, GCP, or Oracle Cloud
+   - Look for explicit mentions (e.g., "AWS Lambda", "Azure Functions")
+   - Look for service names specific to clouds
+   - If unclear, set to null and ask for clarification
+
+2. **Industry Vertical**: Healthcare, Finance, Retail, Manufacturing, Public Sector, or General
+   - Look for keywords like HIPAA (Healthcare), PCI DSS (Finance), etc.
+
+3. **Functional Requirements** (what the system must do):
+   - Features and capabilities
+   - Business workflows
+   - Integrations needed
+
+4. **Non-Functional Requirements**:
+   - Scalability: How many users? Concurrent load?
+   - Performance: Response time, latency requirements
+   - Availability: Uptime target (e.g., 99.9%), high availability needs
+   - Security: Encryption, access controls
+   - Compliance: HIPAA, PCI DSS, GDPR, SOX, FedRAMP, etc.
+
+5. **Technical Constraints**:
+   - Budget: Monthly/annual budget
+   - Team skills: Programming languages, frameworks team knows
+   - Timeline: Deployment deadline
+
+6. **Implied Requirements**: Based on the above, infer additional needs
+   - E.g., if HIPAA mentioned → encryption at rest/transit required
+   - E.g., if >5000 users → auto-scaling needed
+
+7. **Ambiguities**: Identify missing critical information and generate clarifying questions
+
+RESPOND IN THIS JSON FORMAT:
+```json
+{
+  "target_cloud": "aws|azure|gcp|oracle|null",
+  "industry_vertical": "healthcare|finance|retail|manufacturing|public_sector|general",
+  "functional_requirements": ["requirement1", "requirement2"],
+  "non_functional_requirements": {
+    "scalability": {"target_users": 10000, "concurrent_users": 1000},
+    "performance": {"latency_requirement": "low", "real_time": false},
+    "availability": {"target_uptime": "99.9%", "multi_az": true},
+    "security": {"encryption_required": true},
+    "compliance": ["HIPAA", "PCI DSS"]
+  },
+  "technical_constraints": {
+    "budget": {"monthly": 5000, "currency": "USD"},
+    "team_skills": ["Python", "React"],
+    "timeline": "3 months"
+  },
+  "implied_requirements": ["implied1", "implied2"],
+  "needs_clarification": true|false,
+  "clarifying_questions": ["question1", "question2"],
+  "ambiguities_detected": ["ambiguity1", "ambiguity2"],
+  "confidence_score": 0.85
+}
+```
+
+Be thorough but concise. Use chain-of-thought reasoning internally but output only JSON."""
+        
+        # Create the agent (no Bing needed for requirements extraction)
+        self.agent = self.client.create_agent(
+            name="RequirementsAgent",
+            instructions=self.instructions,
+            enable_bing=False
+        )
     
     async def process(self, input_data: Dict) -> Dict:
         """
-        Extract requirements from user input.
+        Extract requirements from user input using Agent Framework.
         
         Args:
             input_data: Dict with 'user_input' and optional 'context'
@@ -132,48 +209,54 @@ class RequirementsAgent(BaseAgent):
         Returns:
             RequirementsOutput dict
         """
-        self._record_invocation()
-        
         try:
             # Validate input
             req_input = RequirementsInput(**input_data)
             
             self.logger.info(f"Processing input: {req_input.user_input[:100]}...")
             
-            # Extract requirements using pattern matching and keyword detection
-            output = RequirementsOutput()
+            # Build prompt for the agent
+            prompt = f"""Analyze this customer request and extract structured requirements:
+
+Customer Request:
+{req_input.user_input}
+
+{f"Additional Context: {req_input.context}" if req_input.context else ""}
+
+Extract all requirements and respond with the JSON structure specified in your instructions."""
             
-            # 1. Detect cloud platform
-            output.target_cloud = self._detect_cloud_platform(req_input.user_input)
+            # Run the agent
+            self.logger.info("Invoking Agent Framework ChatAgent for requirements extraction")
+            result = await self.agent.run(prompt)
             
-            # 2. Detect industry vertical
-            output.industry_vertical = self._detect_industry(req_input.user_input)
+            if not result or not result.messages:
+                raise ValueError("Agent returned empty response")
             
-            # 3. Extract functional requirements
-            output.functional_requirements = self._extract_functional_requirements(
-                req_input.user_input
-            )
+            # Extract text from the last message
+            response = result.messages[-1].text
+            self.logger.info(f"Agent response: {response[:200]}...")
             
-            # 4. Extract non-functional requirements
-            output.non_functional_requirements = self._extract_non_functional_requirements(
-                req_input.user_input
-            )
+            # Parse JSON response
+            # Extract JSON from markdown code blocks if present
+            json_str = response
+            if "```json" in response:
+                json_str = response.split("```json")[1].split("```")[0].strip()
+            elif "```" in response:
+                json_str = response.split("```")[1].split("```")[0].strip()
             
-            # 5. Extract technical constraints
-            output.technical_constraints = self._extract_constraints(
-                req_input.user_input
-            )
+            try:
+                result = json.loads(json_str)
+            except json.JSONDecodeError:
+                # Fallback: try to find JSON object in response
+                import re
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("Could not parse JSON from agent response")
             
-            # 6. Detect implied requirements
-            output.implied_requirements = self._detect_implied_requirements(
-                output, req_input.user_input
-            )
-            
-            # 7. Check for ambiguities
-            output = self._check_ambiguities(output, req_input.user_input)
-            
-            # 8. Calculate confidence score
-            output.confidence_score = self._calculate_confidence(output)
+            # Convert to RequirementsOutput
+            output = self._parse_agent_response(result)
             
             self.logger.info(
                 f"Extracted requirements: cloud={output.target_cloud}, "
@@ -185,12 +268,65 @@ class RequirementsAgent(BaseAgent):
         
         except Exception as e:
             self.logger.error(f"Error processing requirements: {e}", exc_info=True)
-            error = self._create_error(
-                f"Failed to extract requirements: {str(e)}",
-                error_type=ErrorType.UNKNOWN_ERROR,
-                retryable=True
-            )
-            raise error
+            raise RuntimeError(f"Failed to extract requirements: {str(e)}")
+    
+    def _parse_agent_response(self, result: Dict) -> RequirementsOutput:
+        """
+        Parse agent's JSON response into RequirementsOutput.
+        
+        Args:
+            result: Parsed JSON from agent
+            
+        Returns:
+            RequirementsOutput instance
+        """
+        output = RequirementsOutput()
+        
+        # Target cloud
+        cloud_str = result.get("target_cloud")
+        if cloud_str and cloud_str != "null":
+            output.target_cloud = normalize_cloud_platform(cloud_str)
+        
+        # Industry vertical
+        industry_str = result.get("industry_vertical", "general")
+        try:
+            output.industry_vertical = IndustryVertical(industry_str.upper())
+        except ValueError:
+            output.industry_vertical = IndustryVertical.GENERAL
+        
+        # Functional requirements
+        output.functional_requirements = result.get("functional_requirements", [])
+        
+        # Non-functional requirements
+        nfr_data = result.get("non_functional_requirements", {})
+        nfr = NonFunctionalRequirements()
+        nfr.scalability = nfr_data.get("scalability", {})
+        nfr.performance = nfr_data.get("performance", {})
+        nfr.availability = nfr_data.get("availability", {})
+        nfr.security = nfr_data.get("security", {})
+        nfr.compliance = nfr_data.get("compliance", [])
+        output.non_functional_requirements = nfr
+        
+        # Technical constraints
+        tc_data = result.get("technical_constraints", {})
+        tc = TechnicalConstraints()
+        tc.budget = tc_data.get("budget")
+        tc.team_skills = tc_data.get("team_skills", [])
+        tc.timeline = tc_data.get("timeline")
+        output.technical_constraints = tc
+        
+        # Implied requirements
+        output.implied_requirements = result.get("implied_requirements", [])
+        
+        # Clarification
+        output.needs_clarification = result.get("needs_clarification", False)
+        output.clarifying_questions = result.get("clarifying_questions", [])
+        output.ambiguities_detected = result.get("ambiguities_detected", [])
+        
+        # Confidence score
+        output.confidence_score = result.get("confidence_score", 0.5)
+        
+        return output
     
     def _detect_cloud_platform(self, user_input: str) -> Optional[CloudPlatform]:
         """

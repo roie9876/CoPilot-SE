@@ -194,12 +194,19 @@ export default function CostView({ costs }: CostViewProps) {
           <h4 className="font-bold text-gray-900 dark:text-white">Cost Assumptions</h4>
         </div>
         <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-          {costs.assumptions.slice(0, 5).map((assumption, index) => (
-            <li key={index} className="flex items-start space-x-2">
+          {Array.isArray(costs.assumptions) ? (
+            costs.assumptions.slice(0, 5).map((assumption, index) => (
+              <li key={index} className="flex items-start space-x-2">
+                <span className="text-yellow-600">•</span>
+                <span>{assumption}</span>
+              </li>
+            ))
+          ) : (
+            <li className="flex items-start space-x-2">
               <span className="text-yellow-600">•</span>
-              <span>{assumption}</span>
+              <span>{typeof costs.assumptions === 'string' ? costs.assumptions : 'Standard pricing assumptions apply'}</span>
             </li>
-          ))}
+          )}
         </ul>
         <p className="mt-4 text-xs text-gray-600 dark:text-gray-400 border-t border-yellow-200 dark:border-yellow-800 pt-3">
           <strong>Disclaimer:</strong> Cost estimates are approximate (±30% accuracy) and based on publicly available pricing information. 

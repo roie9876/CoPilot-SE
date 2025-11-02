@@ -8,6 +8,8 @@ The orchestrator implements a linear pipeline:
 4. Documentation Agent - Generate HLD documentation
 
 Each stage passes its output to the next stage, with retry logic and error handling.
+
+REFACTORED: Now uses Agent Framework SDK-based agents
 """
 
 import logging
@@ -15,7 +17,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-from ..models.schemas import (
+from src.models.schemas import (
     OrchestratorInput,
     OrchestratorOutput,
     RequirementsInput,
@@ -33,10 +35,10 @@ from ..models.schemas import (
     AgentException,
     ErrorType,
 )
-from ..agents.requirements_agent import RequirementsAgent
-from ..agents.architecture_agent import ArchitectureAgent
-from ..agents.cost_agent import CostAgent
-from ..agents.documentation_agent import DocumentationAgent
+from src.agents.requirements_agent import RequirementsAgent
+from src.agents.architecture_agent import ArchitectureAgent
+from src.agents.cost_agent import CostAgent
+from src.agents.documentation_agent import DocumentationAgent
 
 
 class MasterOrchestrator:
