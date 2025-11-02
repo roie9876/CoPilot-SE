@@ -379,6 +379,52 @@ CoPilot-SE/
 
 ## 🚀 Common Development Tasks
 
+### ⚠️ CRITICAL: Always Activate Virtual Environment First!
+
+**BEFORE running ANY Python command, ALWAYS activate the virtual environment:**
+
+```bash
+source .venv/bin/activate
+```
+
+**This includes:**
+- Running the backend server
+- Installing Python packages with pip
+- Running Python scripts
+- Running tests
+- Running uvicorn or any Python tool
+
+**Example - Running Backend:**
+```bash
+# ❌ WRONG - Will use system Python 3.9
+python -m uvicorn api.server:app --reload
+
+# ✅ CORRECT - Activate venv first
+source .venv/bin/activate
+python -m uvicorn api.server:app --reload
+
+# ✅ ALSO CORRECT - Use venv Python directly
+.venv/bin/python -m uvicorn api.server:app --reload
+```
+
+**Example - Installing Packages:**
+```bash
+# ❌ WRONG
+pip install some-package
+
+# ✅ CORRECT
+source .venv/bin/activate
+pip install some-package
+
+# ✅ ALSO CORRECT
+.venv/bin/pip install some-package
+```
+
+**Why This Matters:**
+- System Python: 3.9.21 (incompatible with agent-framework)
+- Virtual env Python: 3.11+ (required for this project)
+- Missing packages in system Python will cause ModuleNotFoundError
+
 ### Creating a New Agent Function
 ```python
 from pydantic import BaseModel

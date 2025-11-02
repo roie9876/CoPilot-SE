@@ -127,9 +127,12 @@ class RequirementsAgent:
         self.client = AgentFrameworkClient()
         
         # System instructions for the agent
-        self.instructions = """You are a Requirements Extraction Agent for cloud solution architecture.
+        self.instructions = """You are an Interactive Requirements Extraction Agent for cloud solution architecture.
 
-Your task is to analyze customer requests and extract structured requirements.
+Your task is to analyze customer requests and extract structured requirements through an INTERACTIVE dialogue.
+
+**IMPORTANT**: You MUST ask clarifying questions for any ambiguous or missing critical information.
+Show your chain of thought - explain what you understand and what decisions you're making.
 
 EXTRACT THE FOLLOWING:
 
@@ -161,8 +164,19 @@ EXTRACT THE FOLLOWING:
 6. **Implied Requirements**: Based on the above, infer additional needs
    - E.g., if HIPAA mentioned → encryption at rest/transit required
    - E.g., if >5000 users → auto-scaling needed
+   - E.g., if 99.999% availability mentioned → multi-region, auto-failover required
 
-7. **Ambiguities**: Identify missing critical information and generate clarifying questions
+7. **Chain of Thought**: Explain your reasoning process
+   - What you understood from the requirements
+   - What assumptions you're making
+   - What critical decisions you're considering
+   - Why you need certain clarifications
+
+8. **Ambiguities**: Identify missing critical information and generate clarifying questions
+   - Ask about availability implications (e.g., RTO/RPO for 99.999%)
+   - Ask about disaster recovery strategy
+   - Ask about data residency requirements
+   - Ask about expected growth patterns
 
 RESPOND IN THIS JSON FORMAT:
 ```json
@@ -183,14 +197,29 @@ RESPOND IN THIS JSON FORMAT:
     "timeline": "3 months"
   },
   "implied_requirements": ["implied1", "implied2"],
+  "chain_of_thought": "I understand this is an e-commerce application... For 99.999% availability, I need to know...",
+  "decisions_made": ["Assuming multi-region deployment due to 99.999% availability", "Inferred need for disaster recovery"],
   "needs_clarification": true|false,
-  "clarifying_questions": ["question1", "question2"],
+  "clarifying_questions": [
+    {
+      "question": "For 99.999% availability, what is your target RTO (Recovery Time Objective)?",
+      "rationale": "99.999% uptime means only 5.26 minutes of downtime per year. Need to understand disaster recovery expectations.",
+      "options": ["< 1 minute", "< 5 minutes", "< 15 minutes", "< 1 hour"]
+    },
+    {
+      "question": "Do you require multi-region deployment for disaster recovery?",
+      "rationale": "High availability typically requires failover across geographic regions.",
+      "options": ["Yes, active-active", "Yes, active-passive", "No, single region with multi-AZ"]
+    }
+  ],
   "ambiguities_detected": ["ambiguity1", "ambiguity2"],
-  "confidence_score": 0.85
+  "confidence_score": 0.85,
+  "current_understanding": "Based on your requirements, I understand you need..."
 }
 ```
 
-Be thorough but concise. Use chain-of-thought reasoning internally but output only JSON."""
+**CRITICAL**: Always include chain_of_thought, decisions_made, and current_understanding to show your reasoning.
+Ask specific questions with options when possible. Be thorough but concise."""
         
         # Create the agent (no Bing needed for requirements extraction)
         self.agent = self.client.create_agent(
@@ -318,9 +347,31 @@ Extract all requirements and respond with the JSON structure specified in your i
         # Implied requirements
         output.implied_requirements = result.get("implied_requirements", [])
         
-        # Clarification
+        # Chain of thought & transparency
+        output.chain_of_thought = result.get("chain_of_thought")
+        output.decisions_made = result.get("decisions_made", [])
+        output.current_understanding = result.get("current_understanding")
+        
+        # Clarification - parse structured questions
         output.needs_clarification = result.get("needs_clarification", False)
-        output.clarifying_questions = result.get("clarifying_questions", [])
+        clarifying_q = result.get("clarifying_questions", [])
+        
+        from src.models.schemas import ClarificationQuestion
+        
+        # Handle both old format (simple strings) and new format (structured objects)
+        parsed_questions = []
+        for q in clarifying_q:
+            if isinstance(q, str):
+                # Old format: simple string
+                parsed_questions.append(ClarificationQuestion(
+                    question=q,
+                    rationale="Clarification needed for architecture design"
+                ))
+            elif isinstance(q, dict):
+                # New format: structured object
+                parsed_questions.append(ClarificationQuestion(**q))
+        
+        output.clarifying_questions = parsed_questions
         output.ambiguities_detected = result.get("ambiguities_detected", [])
         
         # Confidence score

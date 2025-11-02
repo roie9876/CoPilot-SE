@@ -4,8 +4,14 @@ import RequirementsForm from './components/RequirementsForm';
 import ArchitectureView from './components/ArchitectureView';
 import CostView from './components/CostView';
 import DocumentationView from './components/DocumentationView';
+import ClarificationView from './components/ClarificationView';
+import { Stage1View } from './components/Stage1View';
+import { Stage2View } from './components/Stage2View';
+import { Stage3View } from './components/Stage3View';
+import { Stage4View } from './components/Stage4View';
+import { Stage5View } from './components/Stage5View';
 import type { OrchestratorOutput } from './types';
-import { generateArchitecture } from './api/client';
+import { generateArchitecture, submitClarification, approveStage } from './api/client';
 import './App.css';
 
 function App() {
@@ -13,18 +19,53 @@ function App() {
   const [result, setResult] = useState<OrchestratorOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'architecture' | 'cost' | 'documentation'>('architecture');
+  
+  // Legacy clarification state
+  const [needsClarification, setNeedsClarification] = useState(false);
+  const [clarificationData, setClarificationData] = useState<OrchestratorOutput | null>(null);
+
+  // Multi-stage wizard state
+  const [inStageFlow, setInStageFlow] = useState(false);
+  const [stageData, setStageData] = useState<OrchestratorOutput | null>(null);
+  
+  // Progressive multi-turn state
+  const [currentRound, setCurrentRound] = useState(1);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
 
   const handleSubmit = async (requirements: string) => {
     console.log('handleSubmit called with:', requirements);
     setLoading(true);
     setError(null);
     setResult(null);
+    setNeedsClarification(false);
+    setClarificationData(null);
+    setInStageFlow(false);
+    setStageData(null);
+    setCurrentRound(1);
+    setLoadingMessage('Generating Round 1 questions...');
 
     try {
       console.log('Calling generateArchitecture...');
       const data = await generateArchitecture(requirements);
       console.log('Received data:', data);
-      setResult(data);
+      
+      // Check for multi-stage flow
+      if (data.status === 'awaiting_stage_approval' && data.stage_output) {
+        console.log('Multi-stage flow detected, showing Stage 1...');
+        setInStageFlow(true);
+        setStageData(data);
+        setCurrentRound(1);
+      }
+      // Check if clarification is needed (legacy flow)
+      else if (data.status === 'needs_clarification') {
+        console.log('Clarification needed, showing questions...');
+        setNeedsClarification(true);
+        setClarificationData(data);
+      }
+      // Complete result
+      else if (data.status === 'success') {
+        setResult(data);
+      }
       console.log('Result set successfully');
     } catch (err) {
       console.error('Error in handleSubmit:', err);
@@ -35,21 +76,188 @@ function App() {
     }
   };
 
+  const handleClarificationSubmit = async (answers: Record<string, string>) => {
+    if (!clarificationData?.session_id) {
+      setError('Session ID not found. Please start over.');
+      return;
+    }
+
+    console.log('handleClarificationSubmit called with:', answers);
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Submitting clarification answers...');
+      const data = await submitClarification(clarificationData.session_id, answers);
+      console.log('Received complete data after clarification:', data);
+      
+      // Should get complete result now
+      setResult(data);
+      setNeedsClarification(false);
+      setClarificationData(null);
+    } catch (err) {
+      console.error('Error in handleClarificationSubmit:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit clarification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStageApproval = async (answers?: Record<string, string>) => {
+    if (!stageData?.session_id || !stageData?.conversation_stage) {
+      setError('Session data not found. Please start over.');
+      return;
+    }
+
+    console.log('handleStageApproval called with:', answers);
+    setLoading(true);
+    setError(null);
+    
+    // Set appropriate loading message based on stage
+    if (stageData.conversation_stage === 'stage_1_requirements') {
+      setLoadingMessage('Analyzing your answers...');
+    } else {
+      setLoadingMessage('Generating recommendations...');
+    }
+
+    try {
+      console.log('Approving stage:', stageData.conversation_stage);
+      const data = await approveStage(
+        stageData.session_id,
+        stageData.conversation_stage,
+        'approve',
+        { answers }
+      );
+      console.log('Received data after stage approval:', data);
+      
+      // Check if we need to show next stage
+      if (data.status === 'awaiting_stage_approval' && data.stage_output) {
+        console.log('Moving to next stage:', data.conversation_stage);
+        
+        // If still in Stage 1, increment round
+        if (data.conversation_stage === 'stage_1_requirements') {
+          // Check if stage title indicates a round number
+          const titleMatch = data.stage_output.stage_title?.match(/Round (\d+)/);
+          if (titleMatch) {
+            setCurrentRound(parseInt(titleMatch[1]));
+          } else {
+            setCurrentRound(prev => prev + 1);
+          }
+        } else {
+          // Moving to Stage 2+, reset round
+          setCurrentRound(1);
+        }
+        
+        setStageData(data);
+      }
+      // Complete result
+      else if (data.status === 'success') {
+        console.log('All stages complete, showing final architecture');
+        setResult(data);
+        setInStageFlow(false);
+        setStageData(null);
+        setCurrentRound(1);
+      }
+    } catch (err) {
+      console.error('Error in handleStageApproval:', err);
+      setError(err instanceof Error ? err.message : 'Failed to approve stage');
+    } finally {
+      setLoading(false);
+      setLoadingMessage('');
+    }
+  };
+
+  const handleGoBack = async () => {
+    if (!stageData?.session_id || !stageData?.conversation_stage) {
+      setError('Session data not found. Please start over.');
+      return;
+    }
+
+    console.log('handleGoBack called');
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await approveStage(
+        stageData.session_id,
+        stageData.conversation_stage,
+        'back'
+      );
+      console.log('Went back to previous stage:', data.conversation_stage);
+      setStageData(data);
+    } catch (err) {
+      console.error('Error in handleGoBack:', err);
+      setError(err instanceof Error ? err.message : 'Failed to go back');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeeAlternatives = async () => {
+    if (!stageData?.session_id || !stageData?.conversation_stage) {
+      setError('Session data not found. Please start over.');
+      return;
+    }
+
+    console.log('handleSeeAlternatives called');
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await approveStage(
+        stageData.session_id,
+        stageData.conversation_stage,
+        'see_alternatives'
+      );
+      console.log('Showing alternatives for current stage');
+      setStageData(data);
+    } catch (err) {
+      console.error('Error in handleSeeAlternatives:', err);
+      setError(err instanceof Error ? err.message : 'Failed to show alternatives');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleModify = async (modificationRequest: string) => {
+    if (!stageData?.session_id || !stageData?.conversation_stage) {
+      setError('Session data not found. Please start over.');
+      return;
+    }
+
+    console.log('handleModify called with:', modificationRequest);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await approveStage(
+        stageData.session_id,
+        stageData.conversation_stage,
+        'modify',
+        { modification_request: modificationRequest }
+      );
+      console.log('Modified recommendations for current stage');
+      setStageData(data);
+    } catch (err) {
+      console.error('Error in handleModify:', err);
+      setError(err instanceof Error ? err.message : 'Failed to modify recommendations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)' }}>
       {/* Header */}
       <header className="bg-white shadow-md" style={{ backgroundColor: 'white' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center space-x-3">
-            <Cloud className="w-10 h-10 text-blue-600" />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Co-Pilot SE
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Multi-Cloud Architecture Assistant
-              </p>
-            </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Copilot for Solution Architects
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Multi-Cloud Architecture Assistant
+            </p>
           </div>
         </div>
       </header>
@@ -57,8 +265,85 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Requirements Form */}
-        {!result && !loading && (
+        {!result && !loading && !needsClarification && !inStageFlow && (
           <RequirementsForm onSubmit={handleSubmit} loading={loading} />
+        )}
+
+        {/* Multi-Stage Flow */}
+        {inStageFlow && stageData && stageData.stage_output && (
+          <>
+            {stageData.conversation_stage === 'stage_1_requirements' && (
+              <Stage1View
+                stageOutput={stageData.stage_output}
+                sessionId={stageData.session_id || ''}
+                onApprove={handleStageApproval}
+                isLoading={loading}
+                loadingMessage={loadingMessage}
+                currentRound={currentRound}
+              />
+            )}
+            {stageData.conversation_stage === 'stage_2_compute' && (
+              <Stage2View
+                stageOutput={stageData.stage_output}
+                sessionId={stageData.session_id || ''}
+                stagesCompleted={stageData.stages_completed || []}
+                onApprove={handleStageApproval}
+                onModify={handleModify}
+                onBack={handleGoBack}
+                onSeeAlternatives={handleSeeAlternatives}
+                isLoading={loading}
+              />
+            )}
+            {stageData.conversation_stage === 'stage_3_data' && (
+              <Stage3View
+                stageOutput={stageData.stage_output}
+                sessionId={stageData.session_id || ''}
+                stagesCompleted={stageData.stages_completed || []}
+                onApprove={handleStageApproval}
+                onModify={handleModify}
+                onBack={handleGoBack}
+                onSeeAlternatives={handleSeeAlternatives}
+                isLoading={loading}
+              />
+            )}
+            {stageData.conversation_stage === 'stage_4_security' && (
+              <Stage4View
+                stageOutput={stageData.stage_output}
+                sessionId={stageData.session_id || ''}
+                stagesCompleted={stageData.stages_completed || []}
+                onApprove={handleStageApproval}
+                onModify={handleModify}
+                onBack={handleGoBack}
+                onSeeAlternatives={handleSeeAlternatives}
+                isLoading={loading}
+              />
+            )}
+            {stageData.conversation_stage === 'stage_5_review' && (
+              <Stage5View
+                stageOutput={stageData.stage_output}
+                sessionId={stageData.session_id || ''}
+                stagesCompleted={stageData.stages_completed || []}
+                onApprove={handleStageApproval}
+                onModify={handleModify}
+                onBack={handleGoBack}
+                onSeeAlternatives={handleSeeAlternatives}
+                isLoading={loading}
+              />
+            )}
+          </>
+        )}
+
+        {/* Legacy Clarification View */}
+        {needsClarification && clarificationData && !loading && (
+          <ClarificationView
+            questions={clarificationData.clarifying_questions || []}
+            chainOfThought={clarificationData.chain_of_thought}
+            decisionsMade={clarificationData.decisions_made}
+            currentUnderstanding={clarificationData.current_understanding}
+            ambiguities={clarificationData.ambiguities}
+            onSubmit={handleClarificationSubmit}
+            isSubmitting={loading}
+          />
         )}
 
         {/* Loading State */}
@@ -153,10 +438,10 @@ function App() {
               </div>
 
               {/* Tab Content */}
-              <div className="p-6">
-                {activeTab === 'architecture' && <ArchitectureView architecture={result.architecture} />}
-                {activeTab === 'cost' && <CostView costs={result.costs} />}
-                {activeTab === 'documentation' && <DocumentationView documentation={result.documentation} />}
+              <div className="space-y-6">
+                {activeTab === 'architecture' && result.architecture && <ArchitectureView architecture={result.architecture} />}
+                {activeTab === 'cost' && result.costs && <CostView costs={result.costs} />}
+                {activeTab === 'documentation' && result.documentation && <DocumentationView documentation={result.documentation} />}
               </div>
             </div>
 

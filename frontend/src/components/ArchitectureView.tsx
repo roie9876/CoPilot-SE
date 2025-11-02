@@ -36,21 +36,43 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
         // 1. Add missing newlines between statements (e.g., "]B -->" should be "]\nB -->")
         diagramCode = diagramCode.replace(/\]([A-Z][A-Z0-9]*)\s+(-->|---)/g, ']\n$1 $2');
         
-        // 2. Fix unclosed brackets in node definitions
-        // Match patterns like "A --> B[Label text" without closing "]"
-        // This is a heuristic: if we see a newline after [ without ], add ]
+        // 2. Fix parentheses in labels - wrap entire label in quotes if it contains parentheses
+        diagramCode = diagramCode.replace(/\[([^\]]*\([^\]]*\)[^\]]*)\]/g, (match, label) => {
+          // If label doesn't already have quotes, add them
+          if (!label.startsWith('"') && !label.endsWith('"')) {
+            return `["${label}"]`;
+          }
+          return match;
+        });
+        
+        // 3. Remove trailing whitespace from each line
+        diagramCode = diagramCode.split('\n').map(line => line.trimEnd()).join('\n');
+        
+        // 4. Fix unclosed brackets in node definitions
         const lines = diagramCode.split('\n');
-        const fixedLines = lines.map(line => {
-          // Check if line has [ but no matching ]
-          const openBrackets = (line.match(/\[/g) || []).length;
-          const closeBrackets = (line.match(/\]/g) || []).length;
+        const fixedLines = lines.map((line, index) => {
+          // Skip empty lines and graph declaration
+          if (!line.trim() || line.trim().startsWith('graph ')) {
+            return line;
+          }
+          
+          // Count only the square brackets used for node shapes, not in strings
+          // Simple heuristic: don't count brackets inside quotes
+          const withoutQuotes = line.replace(/"[^"]*"/g, '');
+          const openBrackets = (withoutQuotes.match(/\[/g) || []).length;
+          const closeBrackets = (withoutQuotes.match(/\]/g) || []).length;
+          
           if (openBrackets > closeBrackets) {
+            const missing = openBrackets - closeBrackets;
+            console.log(`Line ${index + 1} missing ${missing} closing bracket(s): ${line.substring(0, 60)}`);
             // Add missing closing brackets at the end of the line
-            return line + ']'.repeat(openBrackets - closeBrackets);
+            return line.trimEnd() + ']'.repeat(missing);
           }
           return line;
         });
         diagramCode = fixedLines.join('\n');
+        
+        console.log('Final processed diagram:', diagramCode);
         
         try {
           // Generate unique ID for this diagram

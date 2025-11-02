@@ -39,6 +39,17 @@ class WorkflowStatus(str, Enum):
     ERROR = "error"
     NEEDS_CLARIFICATION = "needs_clarification"
     IN_PROGRESS = "in_progress"
+    AWAITING_STAGE_APPROVAL = "awaiting_stage_approval"  # NEW: Waiting for user to approve stage
+
+
+class ConversationStage(str, Enum):
+    """5-stage wizard workflow for interactive architecture design."""
+    STAGE_1_REQUIREMENTS = "stage_1_requirements"  # Basic requirements discovery
+    STAGE_2_COMPUTE = "stage_2_compute"            # Compute & scalability decisions
+    STAGE_3_DATA = "stage_3_data"                  # Data architecture decisions
+    STAGE_4_SECURITY = "stage_4_security"          # Security & compliance decisions
+    STAGE_5_REVIEW = "stage_5_review"              # Final review & approval
+    COMPLETE = "complete"                           # All stages approved, ready for architecture
 
 
 class ErrorType(str, Enum):
@@ -53,6 +64,50 @@ class ErrorType(str, Enum):
 # ============================================================
 # BASE MODELS
 # ============================================================
+
+class ClarificationQuestion(BaseModel):
+    """A clarification question with context."""
+    question: str = Field(..., description="The question to ask the user")
+    rationale: str = Field(..., description="Why this question is important")
+    options: Optional[List[str]] = Field(None, description="Optional predefined answer choices")
+    category: Optional[str] = Field(None, description="Category of question (e.g., 'availability', 'security')")
+
+
+class TradeOff(BaseModel):
+    """A trade-off comparison between options."""
+    option_name: str = Field(..., description="Name of this option (e.g., 'Premium Tier', 'Standard Tier')")
+    pros: List[str] = Field(..., description="Advantages of this option")
+    cons: List[str] = Field(..., description="Disadvantages of this option")
+    cost_impact: str = Field(..., description="Cost impact (e.g., '$1,500/month', '+$800/month')")
+    performance_impact: Optional[str] = Field(None, description="Performance implications")
+    recommended: bool = Field(False, description="Whether this is the AI's recommended option")
+
+
+class StageRecommendation(BaseModel):
+    """AI's recommendation for a specific decision with full reasoning."""
+    decision_name: str = Field(..., description="Name of the decision (e.g., 'Database Selection', 'Compute Platform')")
+    recommendation: str = Field(..., description="The AI's recommended solution")
+    reasoning: str = Field(..., description="Detailed explanation of WHY this is recommended")
+    trade_offs: List[TradeOff] = Field(default_factory=list, description="Comparison of different options")
+    alternatives: List[str] = Field(default_factory=list, description="Other viable alternatives with brief description")
+    cost_impact: str = Field(..., description="Cost impact of this decision")
+    dependencies: List[str] = Field(default_factory=list, description="What previous decisions this depends on")
+    follow_up_questions: List[ClarificationQuestion] = Field(default_factory=list, description="Additional questions if user wants to modify")
+
+
+class StageOutput(BaseModel):
+    """Output from a single stage of the wizard."""
+    stage: ConversationStage = Field(..., description="Which stage this output is for")
+    stage_title: str = Field(..., description="Human-readable stage title")
+    stage_description: str = Field(..., description="What this stage is about")
+    recommendations: List[StageRecommendation] = Field(default_factory=list, description="AI recommendations for this stage")
+    questions: List[ClarificationQuestion] = Field(default_factory=list, description="Questions for this stage")
+    chain_of_thought: Optional[str] = Field(None, description="AI's reasoning process for this stage")
+    decisions_made: List[str] = Field(default_factory=list, description="Key decisions made based on previous answers")
+    estimated_cost: Optional[str] = Field(None, description="Running cost estimate with this stage's decisions")
+    can_proceed: bool = Field(True, description="Whether user can proceed to next stage")
+    requires_approval: bool = Field(True, description="Whether this stage requires explicit approval")
+
 
 class Citation(BaseModel):
     """Source citation."""
@@ -93,6 +148,41 @@ class AgentException(Exception):
 # ORCHESTRATOR MODELS
 # ============================================================
 
+class ClarificationResponse(BaseModel):
+    """User's response to clarification questions (legacy single-round)."""
+    session_id: str = Field(..., description="Session ID from previous request")
+    answers: Dict[str, str] = Field(..., description="Map of question to answer")
+    
+    @validator('answers')
+    def validate_answers(cls, v):
+        """Ensure at least one answer provided."""
+        if not v:
+            raise ValueError("At least one answer must be provided")
+        return v
+
+
+class StageApprovalResponse(BaseModel):
+    """User's response to stage recommendations (new multi-stage flow)."""
+    session_id: str = Field(..., description="Session ID from previous request")
+    stage: ConversationStage = Field(..., description="Which stage this approval is for")
+    
+    # User action
+    action: Literal["approve", "modify", "back", "see_alternatives"] = Field(
+        ..., 
+        description="What user wants to do: approve (proceed), modify (ask questions), back (previous stage), see_alternatives"
+    )
+    
+    # If action == "modify", these provide additional context
+    modification_request: Optional[str] = Field(None, description="What user wants to change or clarify")
+    selected_alternative: Optional[str] = Field(None, description="If user selected a different option")
+    
+    # Answers to follow-up questions (if any were asked)
+    answers: Optional[Dict[str, str]] = Field(None, description="Answers to follow-up clarification questions")
+    
+    # User feedback on recommendations
+    feedback: Optional[str] = Field(None, description="Optional feedback on the recommendations")
+
+
 class OrchestratorInput(BaseModel):
     """Input for Master Orchestrator."""
     
@@ -107,6 +197,16 @@ class OrchestratorInput(BaseModel):
     context: Optional[Dict] = Field(
         None,
         description="Previous conversation context for multi-turn interactions"
+    )
+    
+    # For continuing after clarification
+    session_id: Optional[str] = Field(
+        None,
+        description="Session ID for continuing a previous conversation"
+    )
+    clarification_answers: Optional[Dict[str, str]] = Field(
+        None,
+        description="Answers to clarifying questions from previous interaction"
     )
     
     options: Dict = Field(
@@ -130,6 +230,7 @@ class OrchestratorOutput(BaseModel):
     """Output from Master Orchestrator."""
     
     status: WorkflowStatus
+    current_stage: Optional[str] = Field(None, description="Current workflow stage")
     
     # Agent outputs (optional based on status)
     requirements: Optional[Dict] = None
@@ -141,9 +242,26 @@ class OrchestratorOutput(BaseModel):
     citations: List[Citation] = Field(default_factory=list)
     workflow_metadata: WorkflowMetadata
     
-    # If needs_clarification
-    clarifying_questions: Optional[List[str]] = None
+    # ===== LEGACY SINGLE-ROUND CLARIFICATION (backwards compatible) =====
+    # Interactive clarification (if status == NEEDS_CLARIFICATION)
+    clarifying_questions: Optional[List[ClarificationQuestion]] = None
+    chain_of_thought: Optional[str] = Field(None, description="Agent's reasoning process")
+    decisions_made: Optional[List[str]] = Field(None, description="Decisions made so far")
+    current_understanding: Optional[str] = Field(None, description="Current understanding summary")
     ambiguities: Optional[List[str]] = None
+    
+    # ===== NEW MULTI-STAGE WIZARD FLOW =====
+    # Stage-based workflow (if status == AWAITING_STAGE_APPROVAL)
+    conversation_stage: Optional[ConversationStage] = Field(None, description="Current conversation stage (1-5)")
+    stage_output: Optional[StageOutput] = Field(None, description="Output for current stage")
+    stages_completed: List[ConversationStage] = Field(default_factory=list, description="Stages user has approved")
+    all_stage_decisions: Dict[str, List[str]] = Field(default_factory=dict, description="All decisions from previous stages")
+    total_estimated_cost: Optional[str] = Field(None, description="Running total cost across all stages")
+    can_go_back: bool = Field(False, description="Whether user can go back to previous stage")
+    
+    # Session management for multi-turn interaction
+    session_id: Optional[str] = Field(None, description="Session ID for continuing conversation")
+    awaiting_response: bool = Field(False, description="Whether system is waiting for user input")
     
     # If error
     error_message: Optional[str] = None
@@ -220,9 +338,23 @@ class RequirementsOutput(BaseModel):
         description="Requirements inferred from context"
     )
     
+    # Chain of Thought & Transparency
+    chain_of_thought: Optional[str] = Field(
+        None,
+        description="Agent's reasoning process and understanding"
+    )
+    decisions_made: List[str] = Field(
+        default_factory=list,
+        description="Key decisions and assumptions made by the agent"
+    )
+    current_understanding: Optional[str] = Field(
+        None,
+        description="Summary of what the agent currently understands"
+    )
+    
     # Clarification
     needs_clarification: bool = False
-    clarifying_questions: List[str] = Field(default_factory=list)
+    clarifying_questions: List[ClarificationQuestion] = Field(default_factory=list)
     ambiguities_detected: List[str] = Field(default_factory=list)
     
     # Metadata

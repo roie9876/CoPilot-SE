@@ -1,0 +1,144 @@
+.stage-progress {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stage-progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.stage-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.stage-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.stage-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.stage-number {
+  font-size: 18px;
+}
+
+/* Completed stage */
+.stage-completed .stage-circle {
+  background: #10b981;
+  color: white;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Current stage */
+.stage-current .stage-circle {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Upcoming stage */
+.stage-upcoming .stage-circle {
+  background: #e5e7eb;
+  color: #9ca3af;
+}
+
+.stage-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.stage-completed .stage-label {
+  color: #10b981;
+}
+
+.stage-current .stage-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.stage-upcoming .stage-label {
+  color: #9ca3af;
+}
+
+/* Connector line between stages */
+.stage-connector {
+  flex: 1;
+  height: 4px;
+  margin: 0 8px;
+  margin-bottom: 32px;
+  transition: all 0.3s ease;
+}
+
+.stage-connector-completed {
+  background: #10b981;
+}
+
+.stage-connector-current {
+  background: linear-gradient(to right, #10b981, #3b82f6);
+}
+
+.stage-connector-upcoming {
+  background: #e5e7eb;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.6);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stage-progress {
+    padding: 16px;
+  }
+
+  .stage-circle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stage-number {
+    font-size: 16px;
+  }
+
+  .stage-label {
+    font-size: 11px;
+  }
+
+  .stage-connector {
+    margin: 0 4px;
+    margin-bottom: 28px;
+  }
+}

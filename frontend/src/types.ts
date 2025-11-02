@@ -1,5 +1,12 @@
 // Type definitions for Co-Pilot SE API
 
+export interface ClarificationQuestion {
+  question: string;
+  rationale: string;
+  options?: string[];
+  category?: string;
+}
+
 export interface RequirementsOutput {
   target_cloud: string;
   region: string | null;
@@ -20,8 +27,13 @@ export interface RequirementsOutput {
     preferred_technologies: string[];
   };
   implied_requirements: string[];
+  // Chain of thought fields
+  chain_of_thought?: string;
+  decisions_made?: string[];
+  current_understanding?: string;
+  // Clarification fields
   needs_clarification: boolean;
-  clarifying_questions: string[];
+  clarifying_questions: ClarificationQuestion[];
   ambiguities_detected: string[];
   confidence_score: number;
   extraction_method: string;
@@ -141,18 +153,76 @@ export interface WorkflowMetadata {
   end_time: string;
 }
 
+// Multi-stage wizard types
+export type ConversationStage = 
+  | 'stage_1_requirements'
+  | 'stage_2_compute'
+  | 'stage_3_data'
+  | 'stage_4_security'
+  | 'stage_5_review'
+  | 'complete';
+
+export interface TradeOff {
+  option_name: string;
+  pros: string[];
+  cons: string[];
+  cost_impact: string;
+  performance_impact?: string;
+  recommended: boolean;
+}
+
+export interface StageRecommendation {
+  decision_name: string;
+  recommendation: string;
+  reasoning: string;
+  trade_offs: TradeOff[];
+  alternatives: string[];
+  cost_impact: string;
+  dependencies?: string[];
+  follow_up_questions?: ClarificationQuestion[];
+}
+
+export interface StageOutput {
+  stage: ConversationStage;
+  stage_title: string;
+  stage_description: string;
+  recommendations: StageRecommendation[];
+  questions: ClarificationQuestion[];
+  chain_of_thought?: string;
+  decisions_made: string[];
+  estimated_cost?: string;
+  can_proceed: boolean;
+  requires_approval: boolean;
+}
+
 export interface OrchestratorOutput {
   status: string;
-  requirements: RequirementsOutput;
-  architecture: ArchitectureOutput;
-  costs: CostOutput;
-  documentation: DocumentationOutput;
+  current_stage?: string;
+  requirements?: RequirementsOutput;
+  architecture?: ArchitectureOutput;
+  costs?: CostOutput;
+  documentation?: DocumentationOutput;
   citations: Citation[];
   workflow_metadata: WorkflowMetadata;
-  clarifying_questions?: string[];
+  // Interactive clarification fields
+  clarifying_questions?: ClarificationQuestion[];
+  chain_of_thought?: string;
+  decisions_made?: string[];
+  current_understanding?: string;
   ambiguities?: string[];
+  // Session management
+  session_id?: string;
+  awaiting_response?: boolean;
+  // Multi-stage wizard fields
+  conversation_stage?: ConversationStage;
+  stage_output?: StageOutput;
+  stages_completed?: ConversationStage[];
+  all_stage_decisions?: Record<string, string[]>;
+  total_estimated_cost?: string;
+  can_go_back?: boolean;
+  // Error fields
   error_message?: string;
-  errors: any[];
+  errors: Array<Record<string, unknown>>;
 }
 
 export interface ApiError {
