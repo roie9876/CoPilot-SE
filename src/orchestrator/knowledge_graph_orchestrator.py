@@ -221,8 +221,13 @@ class KnowledgeGraphOrchestrator:
         domain_obj = getattr(kg, domain)
         for field_name, answer in answers.items():
             if hasattr(domain_obj, field_name):
-                setattr(domain_obj, field_name, answer)
-                print(f"  - Updated {field_name} = {answer}")
+                # Parse special fields that need transformation
+                parsed_answer = self._parse_answer(field_name, answer)
+                setattr(domain_obj, field_name, parsed_answer)
+                if parsed_answer != answer:
+                    print(f"  - Updated {field_name} = {answer} → {parsed_answer}")
+                else:
+                    print(f"  - Updated {field_name} = {answer}")
         
         # Update confidence for this domain
         agent = self.domain_agents[domain]
@@ -244,6 +249,73 @@ class KnowledgeGraphOrchestrator:
         
         return kg
 
+    def _parse_answer(self, field_name: str, answer: Any) -> Any:
+        """
+        Parse answer values that need transformation before storing in KG.
+        
+        Examples:
+        - rto_minutes: "< 5 minutes ..." → 5 (int)
+        - rpo_minutes: "Zero (no data loss)" → 0 (int)
+        - multi_region: "Critical - Cannot afford..." → True (bool)
+        """
+        if not isinstance(answer, str):
+            return answer
+        
+        # Parse RTO minutes from option text
+        if field_name == "rto_minutes":
+            if "< 5" in answer or "5 minutes" in answer:
+                return 5
+            elif "5-15" in answer or "15 minutes" in answer:
+                return 15
+            elif "15-60" in answer or "60 minutes" in answer:
+                return 60
+            elif "1-4 hours" in answer:
+                return 240  # 4 hours
+            elif "> 4 hours" in answer:
+                return 480  # 8 hours
+            return answer  # Fallback to original
+        
+        # Parse RPO minutes from option text
+        if field_name == "rpo_minutes":
+            if "Zero" in answer or "no data loss" in answer:
+                return 0
+            elif "< 5" in answer:
+                return 5
+            elif "5-15" in answer:
+                return 15
+            elif "15-60" in answer:
+                return 60
+            elif "> 1 hour" in answer:
+                return 120  # 2 hours
+            return answer  # Fallback to original
+        
+        # Parse multi_region boolean from business impact description
+        if field_name == "multi_region":
+            if "Critical" in answer or "High" in answer:
+                return True
+            elif "Medium" in answer or "Low" in answer:
+                return False
+            return answer  # Fallback to original
+        
+        # Parse ha_model from option text
+        if field_name == "ha_model":
+            if "Active-Active" in answer:
+                return "active_active"
+            elif "Active-Passive" in answer:
+                return "active_passive"
+            elif "Single Region" in answer:
+                return "single_region"
+            return answer  # Fallback to original
+        
+        # Parse regions_in_scope - convert string to list if needed
+        if field_name == "regions_in_scope":
+            if isinstance(answer, str):
+                # Single region selected - convert to list
+                return [answer]
+            return answer  # Already a list
+        
+        return answer
+    
     def _initialize_knowledge_graph(
         self,
         context: Context,
@@ -323,9 +395,12 @@ class KnowledgeGraphOrchestrator:
         Select the next domain to process based on intent and current state.
         
         Priority:
-        1. Domains with conflicts (need resolution)
-        2. Domains with critical gaps (following intent-specific order)
+        1. Domains with critical gaps (following intent-specific order)
+        2. Domains with conflicts (need resolution)
         3. Domains with low confidence (following intent-specific order)
+        
+        Note: Critical gaps take priority over conflicts because we need complete
+        information before we can properly resolve conflicts.
         
         Returns:
             Domain name (e.g., "identity_access") or None if all complete
@@ -336,7 +411,21 @@ class KnowledgeGraphOrchestrator:
             self.domain_order_by_intent[Intent.NEW_DEPLOYMENT],  # Default
         )
         
-        # Check for domains with conflicts
+        # PRIORITY 1: Check for domains with critical gaps (CHANGED ORDER)
+        for domain in domain_order:
+            agent = self.domain_agents[domain]
+            if not agent.is_relevant_for_intent(kg):
+                print(f"[SelectDomain] Skipping {domain} - not relevant for intent")
+                continue
+            
+            missing_fields = agent.get_missing_critical_fields(kg)
+            if missing_fields:
+                print(f"[SelectDomain] Selected {domain} - has {len(missing_fields)} critical gaps: {missing_fields}")
+                return domain
+            else:
+                print(f"[SelectDomain] {domain} has no critical gaps")
+        
+        # PRIORITY 2: Check for domains with conflicts (MOVED TO SECOND)
         domains_with_conflicts = set()
         for conflict in kg.status.conflicts:
             domains_with_conflicts.update(conflict.domains_involved)
@@ -345,19 +434,10 @@ class KnowledgeGraphOrchestrator:
             if domain in domains_with_conflicts:
                 agent = self.domain_agents[domain]
                 if agent.is_relevant_for_intent(kg):
+                    print(f"[SelectDomain] Selected {domain} - has unresolved conflicts")
                     return domain
         
-        # Check for domains with critical gaps
-        for domain in domain_order:
-            agent = self.domain_agents[domain]
-            if not agent.is_relevant_for_intent(kg):
-                continue
-            
-            missing_fields = agent.get_missing_critical_fields(kg)
-            if missing_fields:
-                return domain
-        
-        # Check for domains with low confidence (< 80%)
+        # PRIORITY 3: Check for domains with low confidence (< 80%)
         for domain in domain_order:
             agent = self.domain_agents[domain]
             if not agent.is_relevant_for_intent(kg):
@@ -413,10 +493,11 @@ class KnowledgeGraphOrchestrator:
             print(f"[Readiness] Not ready - {len(kg.status.critical_gaps)} critical gaps remain")
             return False
         
-        # Check for high-severity unresolved conflicts
-        high_conflicts = [c for c in kg.status.conflicts if c.severity == "high"]
-        if high_conflicts:
-            print(f"[Readiness] Not ready - {len(high_conflicts)} high-severity conflicts unresolved")
+        # Check for CRITICAL-severity unresolved conflicts only
+        # (High-severity conflicts are warnings and don't block design)
+        critical_conflicts = [c for c in kg.status.conflicts if c.severity == "critical"]
+        if critical_conflicts:
+            print(f"[Readiness] Not ready - {len(critical_conflicts)} critical-severity conflicts unresolved")
             return False
         
         # Check confidence for all relevant domains
@@ -439,10 +520,13 @@ class KnowledgeGraphOrchestrator:
         Returns:
             Tuple of (domain_name, questions)
         """
+        print(f"\n[GetNextQuestions] Current critical gaps: {len(kg.status.critical_gaps)}")
         next_domain = self._select_next_domain(kg)
         if not next_domain:
+            print("[GetNextQuestions] No next domain selected - all done!")
             return ("", [])
         
+        print(f"[GetNextQuestions] Selected domain: {next_domain}")
         agent = self.domain_agents[next_domain]
         missing_fields = agent.get_missing_critical_fields(kg)
         questions = agent.generate_questions(missing_fields, kg)

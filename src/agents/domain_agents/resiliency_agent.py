@@ -73,8 +73,7 @@ class ResiliencyDomainAgent(BaseDomainAgent):
         # Optional fields
         self.optional_fields = [
             "failover_method",
-            "can_replicate_data_cross_region",
-            "regulatory_block_on_replication",
+            # Note: Data residency restrictions are checked via data_persistence.data_residency
         ]
     
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
@@ -295,7 +294,7 @@ class ResiliencyDomainAgent(BaseDomainAgent):
         
         # Conflict 1: Multi-region without RTO/RPO
         if (resiliency.multi_region is True and
-            (not resiliency.rto_minutes or not resiliency.rpo_minutes)):
+            (resiliency.rto_minutes is None or resiliency.rpo_minutes is None)):  # Fixed: use 'is None' instead of 'not' to handle 0 values
             conflicts.append(Conflict(
                 conflict_id="resiliency_incomplete_001",
                 domains_involved=["resiliency_dr"],
@@ -311,22 +310,23 @@ class ResiliencyDomainAgent(BaseDomainAgent):
                 severity="critical"
             ))
         
-        # Conflict 2: Active-active but can't replicate data
+        # Conflict 2: Active-active with data residency restrictions
+        # Check if data residency restrictions conflict with multi-region active-active
         if (resiliency.ha_model == "active_active" and
-            data.can_replicate_data_cross_region is False):
+            data.data_residency and data.data_residency != "global_ok"):
             conflicts.append(Conflict(
                 conflict_id="resiliency_data_001",
                 domains_involved=["resiliency_dr", "data_persistence"],
                 description=(
-                    "Active-active HA model requires cross-region data replication, "
-                    "but data replication across regions is not possible "
-                    "(either technically or due to regulatory constraints)."
+                    f"Active-active HA model requires data replication across regions, "
+                    f"but data residency is restricted to: {data.data_residency}. "
+                    "This may limit or prevent cross-region replication."
                 ),
                 question=(
-                    "Should we change to active-passive HA model (single active region)? "
-                    "Or can data replication constraints be resolved?"
+                    "Can you relax data residency requirements to allow multi-region replication? "
+                    "Or should we use active-passive within a single compliant region?"
                 ),
-                severity="critical"
+                severity="high"
             ))
         
         # Conflict 3: RPO=0 but async replication
@@ -375,13 +375,13 @@ class ResiliencyDomainAgent(BaseDomainAgent):
                 description=(
                     f"Multi-region deployment planned across {networking.regions_in_scope}, "
                     f"but data residency requirement is '{data.data_residency}'. "
-                    "This may prohibit cross-region data replication."
+                    "Architecture will ensure all regions comply with data residency (e.g., multiple US regions)."
                 ),
                 question=(
-                    "Can data be replicated across regions given data residency constraints? "
-                    "If not, multi-region HA may not be feasible without active-passive with regional data silos."
+                    "Should we use multiple regions within the same geography (e.g., East US + West US) "
+                    "to satisfy both multi-region HA and data residency requirements?"
                 ),
-                severity="critical"
+                severity="high"  # Changed from critical - can be solved with regional pairing
             ))
         
         # Conflict 6: Multi-region but only one region specified
@@ -392,13 +392,13 @@ class ResiliencyDomainAgent(BaseDomainAgent):
                 domains_involved=["resiliency_dr", "networking_connectivity"],
                 description=(
                     "Multi-region HA specified, but only one region (or no regions) defined in networking. "
-                    "Multi-region requires at least 2 Azure regions."
+                    "Multi-region requires at least 2 Azure regions. Architecture agent will suggest paired region."
                 ),
                 question=(
                     "Which Azure regions should be used for multi-region deployment? "
                     "Example: West Europe + North Europe, or East US + West US"
                 ),
-                severity="critical"
+                severity="high"  # Changed from critical - arch agent can suggest paired region
             ))
         
         return conflicts
