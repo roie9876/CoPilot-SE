@@ -16,7 +16,10 @@ import logging
 import time
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.models.knowledge_graph import KnowledgeGraph
 
 from src.models.schemas import (
     OrchestratorInput,
@@ -79,12 +82,19 @@ class MasterOrchestrator:
         self.cost_agent = CostAgent()
         self.documentation_agent = DocumentationAgent()
         
+        # NEW: Initialize Knowledge Graph Orchestrator
+        from src.orchestrator.knowledge_graph_orchestrator import KnowledgeGraphOrchestrator
+        self.kg_orchestrator = KnowledgeGraphOrchestrator()
+        
         # Workflow state
         self.workflow_metadata: Dict[str, Any] = {}
         self.all_citations: List[Citation] = []
         self.all_errors: List[AgentError] = []
         
-        self.logger.info("MasterOrchestrator initialized")
+        # NEW: Knowledge Graph state (for interactive workflow)
+        self.current_kg: Optional['KnowledgeGraph'] = None
+        
+        self.logger.info("MasterOrchestrator initialized with Knowledge Graph support")
 
     async def orchestrate(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> OrchestratorOutput:
         """
@@ -245,6 +255,263 @@ class MasterOrchestrator:
                 agent_name="RequirementsAgent",
                 error_type=ErrorType.UNKNOWN_ERROR,
                 error_message=f"Requirements analysis failed: {str(e)}",
+                details={"error": str(e)},
+                retryable=True,
+            )
+            self.all_errors.append(error)
+            raise AgentException(error)
+    
+    async def _execute_requirements_stage_with_kg(
+        self,
+        user_input: str,
+        session_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute Requirements Stage using Knowledge Graph Orchestrator.
+        
+        This NEW method replaces the legacy multi-round wizard with adaptive
+        domain-based requirements gathering.
+        
+        Args:
+            user_input: Initial user request
+            session_data: Session state (contains current KG, current domain, etc.)
+            
+        Returns:
+            Dict with status, questions (if needed), or complete KG (if ready)
+        """
+        stage_start = time.time()
+        self.logger.info("🌐 Starting Knowledge Graph requirements gathering")
+        
+        try:
+            # Check if this is initial request or continuing conversation
+            if not session_data or not session_data.get("kg"):
+                # Initial request - start orchestration
+                self.logger.info("🆕 Initial request - extracting intent and initializing KG")
+                
+                kg = self.kg_orchestrator.orchestrate(user_input)
+                self.current_kg = kg
+                
+                # Store KG in session
+                if session_data is None:
+                    session_data = {}
+                session_data["kg"] = kg
+                
+            else:
+                # Continuing conversation - load existing KG
+                kg = session_data["kg"]
+                self.current_kg = kg
+                self.logger.info("🔄 Continuing from existing KG session")
+            
+            # Check if ready for architecture design
+            if kg.status.ready_for_design:
+                self.logger.info("✅ Knowledge Graph ready for architecture design!")
+                
+                # Record stage timing
+                self.workflow_metadata["requirements_stage_duration"] = time.time() - stage_start
+                self.workflow_metadata["requirements_confidence"] = self._calculate_kg_confidence(kg)
+                
+                return {
+                    "status": "complete",
+                    "kg": kg,
+                    "ready_for_design": True,
+                    "confidence": self._calculate_kg_confidence(kg),
+                    "domain_confidence": {
+                        "identity": kg.identity_access.confidence,
+                        "runtime": kg.runtime_platform.confidence,
+                        "networking": kg.networking_connectivity.confidence,
+                        "data": kg.data_persistence.confidence,
+                        "resiliency": kg.resiliency_dr.confidence,
+                        "security": kg.security_governance.confidence,
+                    }
+                }
+            
+            # Get next questions from orchestrator
+            domain, questions = self.kg_orchestrator.get_next_questions(kg)
+            
+            if not questions:
+                # No more questions but not ready - should not happen
+                self.logger.warning("⚠️ No questions but not ready_for_design - forcing completion")
+                return {
+                    "status": "complete",
+                    "kg": kg,
+                    "ready_for_design": True,  # Force completion
+                    "confidence": self._calculate_kg_confidence(kg),
+                }
+            
+            self.logger.info(f"📋 Generated {len(questions)} questions for domain: {domain}")
+            
+            # Transform questions to match frontend schema
+            transformed_questions = []
+            for q in questions:
+                transformed_questions.append({
+                    "question_text": q["question"],
+                    "field_name": q["field"],
+                    "priority": "critical" if q.get("critical", False) else "optional",
+                    "context": q.get("rationale"),
+                    "options": q.get("options", []),
+                })
+            
+            return {
+                "status": "needs_clarification",
+                "domain": domain,
+                "questions": transformed_questions,
+                "kg": kg,
+                "ready_for_design": False,
+                "critical_gaps": len(kg.status.critical_gaps),
+                "conflicts": len(kg.status.conflicts),
+                "domain_confidence": {
+                    "identity": kg.identity_access.confidence,
+                    "runtime": kg.runtime_platform.confidence,
+                    "networking": kg.networking_connectivity.confidence,
+                    "data": kg.data_persistence.confidence,
+                    "resiliency": kg.resiliency_dr.confidence,
+                    "security": kg.security_governance.confidence,
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"❌ Knowledge Graph requirements stage failed: {e}", exc_info=True)
+            error = AgentError(
+                agent_name="KnowledgeGraphOrchestrator",
+                error_type=ErrorType.UNKNOWN_ERROR,
+                error_message=f"KG requirements analysis failed: {str(e)}",
+                details={"error": str(e)},
+                retryable=True,
+            )
+            self.all_errors.append(error)
+            raise AgentException(error)
+    
+    def process_kg_answers(
+        self,
+        domain: str,
+        answers: Dict[str, Any],
+        session_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Process user answers for a specific domain and update Knowledge Graph.
+        
+        Args:
+            domain: Domain being answered (e.g., "identity_access")
+            answers: User's answers {field_name: value}
+            session_data: Current session with KG
+            
+        Returns:
+            Updated session data with next questions or ready status
+        """
+        self.logger.info(f"📝 Processing answers for domain: {domain}")
+        
+        try:
+            kg = session_data.get("kg")
+            if not kg:
+                raise ValueError("No Knowledge Graph found in session")
+            
+            # Update KG with answers
+            updated_kg = self.kg_orchestrator.process_user_answers(kg, domain, answers)
+            
+            # Update session
+            session_data["kg"] = updated_kg
+            self.current_kg = updated_kg
+            
+            self.logger.info(f"✅ Updated KG - Confidence now: {self._calculate_kg_confidence(updated_kg):.2f}")
+            
+            # Check if ready
+            if updated_kg.status.ready_for_design:
+                return {
+                    "status": "complete",
+                    "kg": updated_kg,
+                    "ready_for_design": True,
+                    "confidence": self._calculate_kg_confidence(updated_kg),
+                }
+            
+            # Get next questions
+            next_domain, questions = self.kg_orchestrator.get_next_questions(updated_kg)
+            
+            if not questions:
+                # Force completion if no questions
+                return {
+                    "status": "complete",
+                    "kg": updated_kg,
+                    "ready_for_design": True,
+                    "confidence": self._calculate_kg_confidence(updated_kg),
+                }
+            
+            # Transform questions to match frontend schema
+            transformed_questions = []
+            for q in questions:
+                transformed_questions.append({
+                    "question_text": q["question"],
+                    "field_name": q["field"],
+                    "priority": "critical" if q.get("critical", False) else "optional",
+                    "context": q.get("rationale"),
+                    "options": q.get("options", []),
+                })
+            
+            return {
+                "status": "needs_clarification",
+                "domain": next_domain,
+                "questions": transformed_questions,
+                "kg": updated_kg,
+                "ready_for_design": False,
+                "critical_gaps": len(updated_kg.status.critical_gaps),
+                "conflicts": len(updated_kg.status.conflicts),
+            }
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error processing KG answers: {e}", exc_info=True)
+            raise
+    
+    def _calculate_kg_confidence(self, kg: 'KnowledgeGraph') -> float:
+        """Calculate overall confidence from Knowledge Graph."""
+        confidences = [
+            kg.identity_access.confidence,
+            kg.runtime_platform.confidence,
+            kg.networking_connectivity.confidence,
+            kg.data_persistence.confidence,
+            kg.resiliency_dr.confidence,
+            kg.security_governance.confidence,
+        ]
+        
+        valid = [c for c in confidences if c is not None and c > 0]
+        return sum(valid) / len(valid) if valid else 0.0
+    
+    async def _execute_architecture_stage_from_kg(self, kg: 'KnowledgeGraph') -> ArchitectureOutput:
+        """
+        Execute Architecture Agent with Knowledge Graph input.
+        
+        This NEW method uses the KG → Architecture integration.
+        
+        Args:
+            kg: Completed Knowledge Graph from orchestrator
+            
+        Returns:
+            ArchitectureOutput
+        """
+        stage_start = time.time()
+        
+        try:
+            self.logger.info("🏗️ Generating architecture from Knowledge Graph")
+            
+            # Use the new KG integration method
+            result = await self.architecture_agent.process_from_knowledge_graph(kg)
+            
+            # Collect citations
+            if result.citations:
+                self.all_citations.extend(result.citations)
+            
+            # Record stage timing
+            self.workflow_metadata["architecture_stage_duration"] = time.time() - stage_start
+            self.workflow_metadata["total_services_selected"] = len(result.services)
+            
+            self.logger.info(f"✅ Architecture generated: {len(result.services)} services selected")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Architecture stage (from KG) failed: {e}", exc_info=True)
+            error = AgentError(
+                agent_name="ArchitectureAgent",
+                error_type=ErrorType.UNKNOWN_ERROR,
+                error_message=f"Architecture design from KG failed: {str(e)}",
                 details={"error": str(e)},
                 retryable=True,
             )

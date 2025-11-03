@@ -6,6 +6,8 @@ Provides REST API endpoints for the frontend React application
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from typing import Dict, Any
+from datetime import datetime
 import uvicorn
 import sys
 import logging
@@ -407,6 +409,245 @@ async def approve_stage(request: StageApprovalRequest):
         )
 
 
+# ============================================================================
+# NEW: Knowledge Graph API Endpoints (Adaptive Requirements Gathering)
+# ============================================================================
+
+class KGStartRequest(BaseModel):
+    """Request to start Knowledge Graph requirements gathering"""
+    requirements: str = Field(
+        ...,
+        min_length=10,
+        description="Initial user requirements in natural language"
+    )
+
+
+class KGAnswerRequest(BaseModel):
+    """Request to submit answers for a specific domain"""
+    session_id: str = Field(..., description="Session ID from KG start")
+    domain: str = Field(..., description="Domain being answered (e.g., 'identity_access')")
+    answers: Dict[str, Any] = Field(..., description="Answers as {field_name: value}")
+
+
+class KGArchitectureRequest(BaseModel):
+    """Request to generate architecture from completed KG"""
+    session_id: str = Field(..., description="Session ID with complete KG")
+
+
+@app.post("/api/kg/start", tags=["Knowledge Graph"])
+async def kg_start(request: KGStartRequest):
+    """
+    Start Knowledge Graph requirements gathering (ADAPTIVE approach).
+    
+    This replaces the fixed 3-round wizard with intelligent domain-based questioning.
+    
+    Returns:
+        - status: "needs_clarification" (with questions) or "complete"
+        - domain: Current domain being questioned
+        - questions: List of questions for this domain
+        - domain_confidence: Confidence scores for all 6 domains
+    """
+    try:
+        logger.info(f"🌐 Starting KG requirements gathering: {request.requirements[:100]}...")
+        
+        orch = get_orchestrator()
+        
+        # Start KG orchestration
+        result = await orch._execute_requirements_stage_with_kg(
+            user_input=request.requirements,
+            session_data=None  # New session
+        )
+        
+        # Create session
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        sessions[session_id] = {
+            "kg": result["kg"],
+            "requirements": request.requirements,
+            "created_at": str(datetime.now()),
+            "workflow_type": "knowledge_graph"
+        }
+        
+        logger.info(f"✅ KG session created: {session_id}")
+        logger.info(f"📊 Status: {result['status']}, Domain: {result.get('domain', 'N/A')}")
+        
+        return {
+            "session_id": session_id,
+            "status": result["status"],
+            "domain": result.get("domain"),
+            "questions": result.get("questions", []),
+            "ready_for_design": result.get("ready_for_design", False),
+            "critical_gaps": result.get("critical_gaps", 0),
+            "conflicts": result.get("conflicts", 0),
+            "domain_confidence": result.get("domain_confidence", {}),
+            "overall_confidence": result.get("confidence", 0.0),
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ KG start failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"KG start failed: {str(e)}")
+
+
+@app.post("/api/kg/answer", tags=["Knowledge Graph"])
+async def kg_answer(request: KGAnswerRequest):
+    """
+    Submit answers for a specific domain and get next questions.
+    
+    The orchestrator will:
+    1. Update the Knowledge Graph with answers
+    2. Recalculate confidence for this domain
+    3. Detect conflicts
+    4. Return next questions OR ready_for_design = True
+    """
+    try:
+        # Validate session
+        if request.session_id not in sessions:
+            raise HTTPException(status_code=404, detail=f"Session not found: {request.session_id}")
+        
+        session_data = sessions[request.session_id]
+        
+        logger.info(f"📝 Processing answers for domain: {request.domain}")
+        
+        orch = get_orchestrator()
+        
+        # Process answers
+        result = orch.process_kg_answers(
+            domain=request.domain,
+            answers=request.answers,
+            session_data=session_data
+        )
+        
+        # Update session
+        sessions[request.session_id]["kg"] = result["kg"]
+        
+        logger.info(f"✅ KG updated - Status: {result['status']}")
+        
+        return {
+            "session_id": request.session_id,
+            "status": result["status"],
+            "domain": result.get("domain"),
+            "questions": result.get("questions", []),
+            "ready_for_design": result.get("ready_for_design", False),
+            "critical_gaps": result.get("critical_gaps", 0),
+            "conflicts": result.get("conflicts", 0),
+            "domain_confidence": result.get("domain_confidence", {}),
+            "overall_confidence": result.get("confidence", 0.0),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ KG answer failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"KG answer failed: {str(e)}")
+
+
+@app.get("/api/kg/status/{session_id}", tags=["Knowledge Graph"])
+async def kg_status(session_id: str):
+    """
+    Get current Knowledge Graph status.
+    
+    Returns:
+        - ready_for_design: Whether KG is complete
+        - domain_confidence: Confidence scores for all domains
+        - critical_gaps: Number of remaining critical gaps
+        - conflicts: Number of unresolved conflicts
+    """
+    try:
+        if session_id not in sessions:
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        
+        session_data = sessions[session_id]
+        kg = session_data.get("kg")
+        
+        if not kg:
+            raise HTTPException(status_code=400, detail="No Knowledge Graph in session")
+        
+        return {
+            "session_id": session_id,
+            "ready_for_design": kg.status.ready_for_design,
+            "critical_gaps": len(kg.status.critical_gaps),
+            "conflicts": len(kg.status.conflicts),
+            "domain_confidence": {
+                "identity": kg.identity_access.confidence,
+                "runtime": kg.runtime_platform.confidence,
+                "networking": kg.networking_connectivity.confidence,
+                "data": kg.data_persistence.confidence,
+                "resiliency": kg.resiliency_dr.confidence,
+                "security": kg.security_governance.confidence,
+            },
+            "conflicts_detail": [
+                {
+                    "id": c.conflict_id,
+                    "domains": c.domains_involved,
+                    "description": c.description,
+                    "severity": c.severity,
+                }
+                for c in kg.status.conflicts
+            ],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ KG status failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"KG status failed: {str(e)}")
+
+
+@app.post("/api/kg/architecture", tags=["Knowledge Graph"])
+async def kg_generate_architecture(request: KGArchitectureRequest):
+    """
+    Generate architecture from a completed Knowledge Graph.
+    
+    This endpoint calls the Architecture Agent with KG input.
+    
+    Returns:
+        Complete architecture design (same format as /api/generate)
+    """
+    try:
+        if request.session_id not in sessions:
+            raise HTTPException(status_code=404, detail=f"Session not found: {request.session_id}")
+        
+        session_data = sessions[request.session_id]
+        kg = session_data.get("kg")
+        
+        if not kg:
+            raise HTTPException(status_code=400, detail="No Knowledge Graph in session")
+        
+        if not kg.status.ready_for_design:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Knowledge Graph not ready for design. "
+                       f"Critical gaps: {len(kg.status.critical_gaps)}, "
+                       f"Conflicts: {len(kg.status.conflicts)}"
+            )
+        
+        logger.info(f"🏗️ Generating architecture from KG (session: {request.session_id})")
+        
+        orch = get_orchestrator()
+        
+        # Generate architecture from KG
+        architecture = await orch._execute_architecture_stage_from_kg(kg)
+        
+        logger.info(f"✅ Architecture generated: {len(architecture.services)} services")
+        
+        # TODO: Continue with Cost & Documentation stages (Phase 5)
+        # For now, return just architecture
+        
+        return {
+            "session_id": request.session_id,
+            "status": "success",
+            "architecture": architecture.model_dump(),
+            "message": "Architecture generated successfully. Cost & Documentation stages coming in Phase 5!"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ KG architecture generation failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Architecture generation failed: {str(e)}")
+
+
 @app.get("/", tags=["Root"])
 async def root():
     """
@@ -421,7 +662,11 @@ async def root():
         "description": "Multi-cloud architecture generation API",
         "endpoints": {
             "health": "/health",
-            "generate": "/api/generate (POST)",
+            "generate": "/api/generate (POST) - Legacy wizard",
+            "kg_start": "/api/kg/start (POST) - NEW: Start adaptive KG gathering",
+            "kg_answer": "/api/kg/answer (POST) - NEW: Submit domain answers",
+            "kg_status": "/api/kg/status/{session_id} (GET) - NEW: Get KG status",
+            "kg_architecture": "/api/kg/architecture (POST) - NEW: Generate from KG",
             "docs": "/docs",
         },
     }

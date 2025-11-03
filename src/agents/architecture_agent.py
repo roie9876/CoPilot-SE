@@ -11,9 +11,12 @@ This agent:
 REFACTORED: Now uses Agent Framework SDK with ChatAgent + Bing grounding
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 import logging
 import json
+
+if TYPE_CHECKING:
+    from src.models.knowledge_graph import KnowledgeGraph
 
 from src.services.agent_framework_client import AgentFrameworkClient
 from src.models.schemas import (
@@ -26,6 +29,9 @@ from src.models.schemas import (
     RequirementsOutput,
     CloudPlatform,
     ErrorType,
+    NonFunctionalRequirements,
+    TechnicalConstraints,
+    IndustryVertical,
 )
 
 logger = logging.getLogger(__name__)
@@ -1240,3 +1246,266 @@ Design a complete architecture and provide the JSON response with all sections f
                 )
         
         return citations
+    
+    async def process_from_knowledge_graph(self, kg: 'KnowledgeGraph') -> ArchitectureOutput:
+        """
+        Generate architecture from a completed Knowledge Graph.
+        
+        This method bridges the new Knowledge Graph system with the existing
+        Architecture Agent. It converts the KG to RequirementsOutput format
+        and then calls the existing process() method.
+        
+        Args:
+            kg: Completed KnowledgeGraph from orchestrator
+            
+        Returns:
+            ArchitectureOutput
+            
+        Raises:
+            ValueError: If knowledge graph is not ready for design
+        """
+        from src.models.knowledge_graph import KnowledgeGraph
+        
+        if not kg.status.ready_for_design:
+            raise ValueError(
+                "Knowledge graph is not ready for architecture design. "
+                f"Critical gaps remaining: {len(kg.status.critical_gaps)}. "
+                f"Unresolved conflicts: {len(kg.status.conflicts)}"
+            )
+        
+        self.logger.info("Converting Knowledge Graph to RequirementsOutput format")
+        
+        # Convert KnowledgeGraph to RequirementsOutput
+        requirements = self._convert_kg_to_requirements(kg)
+        
+        # Build architecture input
+        arch_input = ArchitectureInput(
+            requirements=requirements,
+            target_cloud=kg.context.cloud_provider,
+            region=kg.networking_connectivity.regions_in_scope[0] if kg.networking_connectivity.regions_in_scope else None
+        )
+        
+        # Call existing architecture generation logic
+        return await self.process(arch_input.dict())
+    
+    def _convert_kg_to_requirements(self, kg: 'KnowledgeGraph') -> RequirementsOutput:
+        """
+        Convert KnowledgeGraph to RequirementsOutput format.
+        
+        Maps knowledge graph domains to the existing requirements schema
+        that the architecture agent expects.
+        
+        Args:
+            kg: Knowledge graph with all domains populated
+            
+        Returns:
+            RequirementsOutput compatible with existing architecture logic
+        """
+        from src.models.knowledge_graph import KnowledgeGraph, Intent, WorkloadType
+        
+        # Build functional requirements from context and domains
+        functional_reqs = [kg.context.business_description]
+        
+        # Add runtime requirements
+        if kg.runtime_platform.target_runtime:
+            functional_reqs.append(
+                f"Deploy using {kg.runtime_platform.target_runtime}"
+            )
+        if kg.runtime_platform.containerized:
+            functional_reqs.append("Application is containerized")
+        
+        # Add networking requirements
+        if kg.networking_connectivity.exposure:
+            functional_reqs.append(
+                f"Application requires {kg.networking_connectivity.exposure} exposure"
+            )
+        if kg.networking_connectivity.private_link_required:
+            functional_reqs.append("Requires private connectivity (Private Link)")
+        
+        # Add data requirements
+        if kg.data_persistence.primary_db_engine:
+            functional_reqs.append(
+                f"Database: {kg.data_persistence.primary_db_engine}"
+            )
+        if kg.data_persistence.pii_sensitivity:
+            functional_reqs.append(
+                f"Handles {kg.data_persistence.pii_sensitivity} data"
+            )
+        
+        # Build non-functional requirements
+        nfr = NonFunctionalRequirements(
+            scalability={
+                "target_users": kg.identity_access.auth_users or 1000,
+                "concurrent_users": int((kg.identity_access.auth_users or 1000) * 0.1),
+            },
+            performance={
+                "latency_requirement": "low" if kg.resiliency_dr.rto_minutes and kg.resiliency_dr.rto_minutes < 60 else "moderate"
+            },
+            availability={
+                "target_uptime": "99.9%" if kg.resiliency_dr.multi_region else "99%",
+                "multi_region": kg.resiliency_dr.multi_region,
+                "rto_minutes": kg.resiliency_dr.rto_minutes,
+                "rpo_minutes": kg.resiliency_dr.rpo_minutes,
+            },
+            security={
+                "authentication": kg.identity_access.existing_tenant or "Azure AD",
+                "authorization": "RBAC",
+                "encryption_at_rest": True,
+                "encryption_in_transit": True,
+                "mfa_required": kg.identity_access.mfa_policy == "required",
+            },
+            compliance=kg.security_governance.compliance_frameworks,
+        )
+        
+        # Build technical constraints
+        constraints = TechnicalConstraints(
+            budget=f"POC budget" if kg.context.intent == Intent.NEW_DEPLOYMENT else "Production budget",
+            timeline="8-10 weeks for POC",
+            team_skills=self._infer_team_skills(kg),
+            existing_infrastructure=self._describe_existing_infra(kg),
+        )
+        
+        # Build implied requirements
+        implied_reqs = []
+        
+        # From identity domain
+        if kg.identity_access.external_customers:
+            implied_reqs.append("Requires Azure AD B2C for customer authentication")
+        
+        # From runtime domain
+        if kg.runtime_platform.aks_cni:
+            implied_reqs.append(f"AKS requires {kg.runtime_platform.aks_cni} CNI (irreversible decision)")
+        
+        # From networking domain
+        if kg.networking_connectivity.topology:
+            implied_reqs.append(f"Network topology: {kg.networking_connectivity.topology}")
+        
+        # From resiliency domain
+        if kg.resiliency_dr.ha_model:
+            implied_reqs.append(f"High availability model: {kg.resiliency_dr.ha_model}")
+        
+        # From security domain
+        if kg.security_governance.secrets_management:
+            implied_reqs.append(f"Secrets management: {kg.security_governance.secrets_management}")
+        
+        # Create RequirementsOutput
+        requirements = RequirementsOutput(
+            target_cloud=kg.context.cloud_provider,
+            region=kg.networking_connectivity.regions_in_scope[0] if kg.networking_connectivity.regions_in_scope else None,
+            industry_vertical=IndustryVertical.GENERAL,
+            functional_requirements=functional_reqs,
+            non_functional_requirements=nfr,
+            technical_constraints=constraints,
+            implied_requirements=implied_reqs,
+            confidence_score=self._calculate_overall_confidence(kg),
+            extraction_method="knowledge-graph",
+            current_understanding=self._generate_understanding_summary(kg),
+            decisions_made=self._extract_key_decisions(kg),
+        )
+        
+        return requirements
+    
+    def _infer_team_skills(self, kg: 'KnowledgeGraph') -> List[str]:
+        """Infer team skills from knowledge graph choices."""
+        skills = []
+        
+        # From runtime choices
+        if kg.runtime_platform.target_runtime:
+            runtime = kg.runtime_platform.target_runtime.lower()
+            if "aks" in runtime or "kubernetes" in runtime:
+                skills.append("Kubernetes")
+            if "app service" in runtime:
+                skills.append(".NET or Node.js")
+            if "functions" in runtime:
+                skills.append("Serverless")
+        
+        # From database choices
+        if kg.data_persistence.primary_db_engine:
+            db = kg.data_persistence.primary_db_engine.lower()
+            if "sql" in db:
+                skills.append("SQL Server")
+            if "postgres" in db:
+                skills.append("PostgreSQL")
+            if "cosmos" in db:
+                skills.append("NoSQL")
+        
+        return skills if skills else ["General cloud experience"]
+    
+    def _describe_existing_infra(self, kg: 'KnowledgeGraph') -> str:
+        """Describe existing infrastructure from knowledge graph."""
+        if kg.context.intent.value == "new_deployment":
+            return "Greenfield - no existing infrastructure"
+        
+        parts = []
+        if kg.existing_environment.azure_tenant_id:
+            parts.append(f"Existing Azure tenant: {kg.existing_environment.azure_tenant_id}")
+        if kg.existing_environment.onprem_systems:
+            parts.append(f"On-premises systems: {', '.join(kg.existing_environment.onprem_systems)}")
+        if kg.existing_environment.existing_cloud_resources:
+            parts.append("Existing cloud resources present")
+        
+        return "; ".join(parts) if parts else "Brownfield - extending existing infrastructure"
+    
+    def _calculate_overall_confidence(self, kg: 'KnowledgeGraph') -> float:
+        """Calculate overall confidence from domain confidence scores."""
+        domain_confidences = [
+            kg.identity_access.confidence,
+            kg.runtime_platform.confidence,
+            kg.networking_connectivity.confidence,
+            kg.data_persistence.confidence,
+            kg.resiliency_dr.confidence,
+            kg.security_governance.confidence,
+        ]
+        
+        # Filter out None values and calculate average
+        valid_scores = [c for c in domain_confidences if c is not None]
+        return sum(valid_scores) / len(valid_scores) if valid_scores else 0.5
+    
+    def _generate_understanding_summary(self, kg: 'KnowledgeGraph') -> str:
+        """Generate a summary of current understanding from knowledge graph."""
+        summary_parts = [
+            f"Intent: {kg.context.intent.value}",
+            f"Target cloud: {kg.context.cloud_provider.value}",
+            f"Workload type: {kg.context.workload_type.value}",
+        ]
+        
+        if kg.runtime_platform.target_runtime:
+            summary_parts.append(f"Runtime: {kg.runtime_platform.target_runtime}")
+        
+        if kg.data_persistence.primary_db_engine:
+            summary_parts.append(f"Database: {kg.data_persistence.primary_db_engine}")
+        
+        if kg.resiliency_dr.multi_region:
+            summary_parts.append("Multi-region deployment required")
+        
+        if kg.security_governance.compliance_frameworks:
+            summary_parts.append(f"Compliance: {', '.join(kg.security_governance.compliance_frameworks)}")
+        
+        return ". ".join(summary_parts) + "."
+    
+    def _extract_key_decisions(self, kg: 'KnowledgeGraph') -> List[str]:
+        """Extract key decisions made during requirements gathering."""
+        decisions = []
+        
+        # Runtime decisions
+        if kg.runtime_platform.aks_cni:
+            decisions.append(f"IRREVERSIBLE: AKS CNI set to {kg.runtime_platform.aks_cni}")
+        
+        # Networking decisions
+        if kg.networking_connectivity.topology:
+            decisions.append(f"Network topology: {kg.networking_connectivity.topology}")
+        
+        # Data decisions
+        if kg.data_persistence.primary_db_engine:
+            decisions.append(f"Primary database: {kg.data_persistence.primary_db_engine}")
+        
+        # Resiliency decisions
+        if kg.resiliency_dr.multi_region:
+            decisions.append(f"Multi-region deployment with {kg.resiliency_dr.ha_model}")
+        
+        # Security decisions
+        if kg.identity_access.mfa_policy:
+            decisions.append(f"MFA policy: {kg.identity_access.mfa_policy}")
+        
+        return decisions
+
