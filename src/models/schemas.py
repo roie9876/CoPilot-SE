@@ -16,11 +16,8 @@ import re
 # ============================================================
 
 class CloudPlatform(str, Enum):
-    """Supported cloud platforms."""
-    AWS = "aws"
-    GCP = "gcp"
+    """Supported cloud platforms - Azure only for POC."""
     AZURE = "azure"
-    ORACLE = "oracle"
 
 
 class IndustryVertical(str, Enum):
@@ -745,19 +742,12 @@ def validate_url(url: str) -> bool:
 
 
 def normalize_cloud_platform(platform: str) -> CloudPlatform:
-    """Validate and normalize cloud platform."""
+    """Validate and normalize cloud platform - always returns Azure for POC."""
     platform_lower = platform.lower().strip()
     mapping = {
-        'aws': CloudPlatform.AWS,
-        'amazon': CloudPlatform.AWS,
-        'amazon web services': CloudPlatform.AWS,
-        'gcp': CloudPlatform.GCP,
-        'google': CloudPlatform.GCP,
-        'google cloud': CloudPlatform.GCP,
         'azure': CloudPlatform.AZURE,
         'microsoft azure': CloudPlatform.AZURE,
-        'oracle': CloudPlatform.ORACLE,
-        'oci': CloudPlatform.ORACLE,
-        'oracle cloud': CloudPlatform.ORACLE,
+        'microsoft': CloudPlatform.AZURE,
     }
+    # Always default to Azure (POC is Azure-only)
     return mapping.get(platform_lower, CloudPlatform.AZURE)

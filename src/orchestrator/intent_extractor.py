@@ -3,7 +3,7 @@ Intent & Context Extractor
 
 Analyzes natural language user input and extracts:
 - User intent (new_deployment, extend_existing, dr_only, migration, optimize_security, optimize_cost)
-- Cloud provider (azure, aws, gcp, oracle)
+- Cloud provider (always Azure for POC)
 - Workload type (web_app, api, mobile_backend, data_analytics, etc.)
 - Initial facts from user description
 """
@@ -63,25 +63,22 @@ Your task is to extract structured information from user input:
    - optimize_security: Improving security posture
    - optimize_cost: Cost reduction focus
 
-2. **Cloud Provider Detection** - Identify the target cloud:
-   - azure: Microsoft Azure (default if not specified)
-   - aws: Amazon Web Services
-   - gcp: Google Cloud Platform
-   - oracle: Oracle Cloud Infrastructure
-   Look for explicit mentions or service names (e.g., "AKS" → azure, "EKS" → aws)
+2. **Cloud Provider Detection** - Always Azure:
+   - azure: Microsoft Azure (this is an Azure-only solution)
+   Look for Azure service mentions to understand customer's familiarity with Azure
 
 3. **Workload Type** - Identify the application type:
    - web_app: Web application or website
    - api: REST API or microservices
    - mobile_backend: Mobile app backend
-   - data_analytics: Data processing/analytics
-   - ml_workload: Machine learning workload
-   - database: Database-focused
+   - data_pipeline: Data processing/analytics
+   - ml_service: Machine learning workload
+   - batch_job: Batch jobs
+   - microservices: Microservices architecture
    - iot: IoT application
-   - batch_processing: Batch jobs
-   - real_time_streaming: Real-time data streaming
-   - enterprise_app: Enterprise application (ERP, CRM)
    - e_commerce: E-commerce platform
+   - other: Other workload types
+   - unknown: Cannot determine workload type
 
 4. **Business Description** - Extract key facts:
    - What problem are they solving?

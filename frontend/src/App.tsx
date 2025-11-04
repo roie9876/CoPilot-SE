@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Cloud, FileText, DollarSign, CheckCircle2 } from 'lucide-react';
+import { Loader2, Cloud, FileText, DollarSign, CheckCircle2, Folder } from 'lucide-react';
 import ArchitectureView from './components/ArchitectureView';
 import CostView from './components/CostView';
 import DocumentationView from './components/DocumentationView';
@@ -10,6 +10,7 @@ import { Stage3View } from './components/Stage3View';
 import { Stage4View } from './components/Stage4View';
 import { Stage5View } from './components/Stage5View';
 import KGWizard from './components/KGWizard';
+import SavedDesigns from './components/SavedDesigns';
 import type { OrchestratorOutput } from './types';
 import { generateArchitecture, submitClarification, approveStage } from './api/client';
 import './App.css';
@@ -31,6 +32,9 @@ function App() {
   // Progressive multi-turn state
   const [currentRound, setCurrentRound] = useState(1);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
+
+  // Saved designs state
+  const [showSavedDesigns, setShowSavedDesigns] = useState(false);
 
   // Legacy submit handler (kept for reference, not currently used)
   // @ts-expect-error - unused variable kept for reference
@@ -248,21 +252,43 @@ function App() {
     }
   };
 
+  const handleLoadDesign = (result: OrchestratorOutput) => {
+    setResult(result);
+    setActiveTab('architecture');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)' }}>
       {/* Header */}
       <header className="bg-white shadow-md" style={{ backgroundColor: 'white' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Copilot for Solution Architects
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Multi-Cloud Architecture Assistant
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                Copilot for Solution Architects
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Azure Architecture Assistant
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSavedDesigns(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            >
+              <Folder className="w-5 h-5" />
+              <span>Saved Designs</span>
+            </button>
           </div>
         </div>
       </header>
+
+      {/* Saved Designs Modal */}
+      {showSavedDesigns && (
+        <SavedDesigns
+          onLoadDesign={handleLoadDesign}
+          onClose={() => setShowSavedDesigns(false)}
+        />
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -441,7 +467,13 @@ function App() {
 
               {/* Tab Content */}
               <div className="space-y-6">
-                {activeTab === 'architecture' && result.architecture && <ArchitectureView architecture={result.architecture} />}
+                {activeTab === 'architecture' && result.architecture && (
+                  <ArchitectureView 
+                    architecture={result.architecture} 
+                    costs={result.costs}
+                    documentation={result.documentation}
+                  />
+                )}
                 {activeTab === 'cost' && result.costs && <CostView costs={result.costs} />}
                 {activeTab === 'documentation' && result.documentation && <DocumentationView documentation={result.documentation} />}
               </div>
@@ -465,7 +497,7 @@ function App() {
 
       {/* Footer */}
       <footer className="mt-16 py-6 text-center text-sm text-gray-600 dark:text-gray-400">
-        <p>Co-Pilot SE v2.0 - POC Multi-Cloud Architecture Assistant</p>
+        <p>Co-Pilot SE v2.0 - POC Azure Architecture Assistant</p>
         <p className="mt-1">Powered by Azure OpenAI GPT-5 & Microsoft Agent Framework</p>
       </footer>
     </div>

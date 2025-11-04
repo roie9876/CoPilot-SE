@@ -8,9 +8,9 @@ interface RequirementsFormProps {
 
 const EXAMPLE_PROMPTS = [
   "Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget",
-  "Build a serverless API backend on AWS for a mobile app with user authentication and file storage",
-  "Create a GCP microservices architecture with Kubernetes for a SaaS application",
-  "Design an Oracle Cloud data warehouse solution for analytics with 10TB of data",
+  "Build a serverless API backend on Azure for a mobile app with user authentication and file storage",
+  "Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users",
+  "Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance",
 ];
 
 export default function RequirementsForm({ onSubmit, loading }: RequirementsFormProps) {

@@ -237,7 +237,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
               disabled={isSubmitting}
             />
             <p className="mt-2 text-sm text-gray-500">
-              Minimum 10 characters. Include cloud platform (Azure/AWS/GCP/Oracle), requirements, constraints, and budget.
+              Minimum 10 characters. Include requirements, constraints, and budget.
             </p>
           </div>
 
@@ -253,25 +253,25 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
                 Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget
               </button>
               <button
-                onClick={() => setRequirements("Build a serverless API backend on AWS for a mobile app with user authentication and file storage")}
+                onClick={() => setRequirements("Build a serverless API backend on Azure for a mobile app with user authentication and file storage")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Build a serverless API backend on AWS for a mobile app with user authentication and file storage
+                Build a serverless API backend on Azure for a mobile app with user authentication and file storage
               </button>
               <button
-                onClick={() => setRequirements("Create a GCP microservices architecture with Kubernetes for a SaaS application")}
+                onClick={() => setRequirements("Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Create a GCP microservices architecture with Kubernetes for a SaaS application
+                Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users
               </button>
               <button
-                onClick={() => setRequirements("Design an Oracle Cloud data warehouse solution for analytics with 10TB of data")}
+                onClick={() => setRequirements("Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Design an Oracle Cloud data warehouse solution for analytics with 10TB of data
+                Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance
               </button>
             </div>
           </div>

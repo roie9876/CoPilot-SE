@@ -305,10 +305,13 @@ Generate contextual questions about identity and access requirements.
         networking = graph.networking_connectivity
         security = graph.security_governance
         
+        # Convert auth_users to string once for all checks
+        auth_users_str = str(identity.auth_users) if identity.auth_users else ""
+        
         # Conflict 1: Public app + internal employees only
         if (networking.exposure == "public_internet" and
-            identity.auth_users and "internal" in identity.auth_users.lower() and
-            "external" not in identity.auth_users.lower()):
+            identity.auth_users and "internal" in auth_users_str.lower() and
+            "external" not in auth_users_str.lower()):
             conflicts.append(Conflict(
                 conflict_id="identity_network_001",
                 domains_involved=["identity_access", "networking_connectivity"],
@@ -341,7 +344,7 @@ Generate contextual questions about identity and access requirements.
             ))
         
         # Conflict 3: External customers but might need B2C
-        if (identity.auth_users and "customer" in identity.auth_users.lower() and
+        if (identity.auth_users and "customer" in auth_users_str.lower() and
             not identity.existing_tenant):
             conflicts.append(Conflict(
                 conflict_id="identity_b2c_001",
@@ -359,7 +362,7 @@ Generate contextual questions about identity and access requirements.
         
         # Conflict 4: Private app but external customers
         if (networking.exposure == "private_only" and
-            identity.auth_users and "customer" in identity.auth_users.lower()):
+            identity.auth_users and "customer" in auth_users_str.lower()):
             conflicts.append(Conflict(
                 conflict_id="identity_network_002",
                 domains_involved=["identity_access", "networking_connectivity"],

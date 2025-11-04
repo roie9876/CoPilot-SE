@@ -42,7 +42,7 @@ class RequirementsAgent:
     - Identify ambiguities
     """
     
-    # Cloud service keywords for detection
+    # Cloud service keywords for detection (Azure-only for POC)
     CLOUD_KEYWORDS = {
         CloudPlatform.AZURE: [
             # Compute
@@ -51,49 +51,20 @@ class RequirementsAgent:
             'container apps', 'aca', 'batch', 'service fabric',
             # Storage
             'blob storage', 'table storage', 'queue storage', 'file storage',
-            'azure storage', 'data lake',
+            'azure storage', 'data lake', 'storage account',
             # Database
             'cosmos db', 'sql database', 'azure sql', 'postgresql flexible',
             'mysql flexible', 'synapse', 'sql managed instance',
             # Networking
             'application gateway', 'front door', 'traffic manager',
-            'load balancer', 'vnet', 'virtual network',
+            'load balancer', 'vnet', 'virtual network', 'azure firewall',
+            # Identity & Security
+            'entra id', 'active directory', 'azure ad', 'key vault',
+            'managed identity', 'private link',
+            # Monitoring & Management
+            'application insights', 'log analytics', 'monitor', 'azure monitor',
             # Azure-specific
-            'azure', 'microsoft azure', 'entra', 'active directory'
-        ],
-        CloudPlatform.AWS: [
-            # Compute
-            'ec2', 'lambda', 'elastic beanstalk', 'ecs', 'eks', 'fargate',
-            'lightsail', 'batch',
-            # Storage
-            's3', 'ebs', 'efs', 'fsx', 'storage gateway',
-            # Database
-            'rds', 'dynamodb', 'aurora', 'redshift', 'neptune', 'elasticache',
-            # Networking
-            'elb', 'alb', 'nlb', 'cloudfront', 'route 53', 'api gateway',
-            # AWS-specific
-            'aws', 'amazon web services'
-        ],
-        CloudPlatform.GCP: [
-            # Compute
-            'compute engine', 'cloud functions', 'gke', 'cloud run',
-            'app engine', 'cloud functions',
-            # Storage
-            'cloud storage', 'persistent disk', 'filestore',
-            # Database
-            'cloud sql', 'firestore', 'bigtable', 'spanner', 'memorystore',
-            # Networking
-            'cloud load balancing', 'cloud cdn', 'cloud dns',
-            # GCP-specific
-            'gcp', 'google cloud', 'google cloud platform'
-        ],
-        CloudPlatform.ORACLE: [
-            # Compute
-            'oke', 'oracle kubernetes', 'compute instances',
-            # Database
-            'autonomous database', 'oracle database', 'nosql database',
-            # Oracle-specific
-            'oracle cloud', 'oci', 'oracle'
+            'azure', 'microsoft azure', 'microsoft cloud'
         ]
     }
     
@@ -136,10 +107,9 @@ Show your chain of thought - explain what you understand and what decisions you'
 
 EXTRACT THE FOLLOWING:
 
-1. **Target Cloud Platform**: AWS, Azure, GCP, or Oracle Cloud
-   - Look for explicit mentions (e.g., "AWS Lambda", "Azure Functions")
-   - Look for service names specific to clouds
-   - If unclear, set to null and ask for clarification
+1. **Target Cloud Platform**: Always Azure (this is an Azure-only solution)
+   - Set to "azure" 
+   - Look for Azure service mentions to understand customer's familiarity
 
 2. **Industry Vertical**: Healthcare, Finance, Retail, Manufacturing, Public Sector, or General
    - Look for keywords like HIPAA (Healthcare), PCI DSS (Finance), etc.
@@ -181,7 +151,7 @@ EXTRACT THE FOLLOWING:
 RESPOND IN THIS JSON FORMAT:
 ```json
 {
-  "target_cloud": "aws|azure|gcp|oracle|null",
+  "target_cloud": "azure",
   "industry_vertical": "healthcare|finance|retail|manufacturing|public_sector|general",
   "functional_requirements": ["requirement1", "requirement2"],
   "non_functional_requirements": {

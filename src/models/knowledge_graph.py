@@ -43,12 +43,8 @@ class Intent(str, Enum):
 
 
 class CloudProvider(str, Enum):
-    """Target cloud platform."""
+    """Target cloud platform - Azure only for POC."""
     AZURE = "azure"
-    AWS = "aws"
-    GCP = "gcp"
-    ORACLE = "oracle"
-    MULTI_CLOUD = "multi_cloud"
     UNKNOWN = "unknown"
 
 

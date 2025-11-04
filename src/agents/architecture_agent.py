@@ -197,6 +197,9 @@ class ArchitectureAgent:
         """Initialize Architecture Agent with Agent Framework and Bing."""
         self.logger = logging.getLogger(__name__)
         self.client = AgentFrameworkClient()
+        
+        # Initialize instructions and create agent
+        self._init_instructions()
     
     def _parse_time_value(self, value) -> int:
         """
@@ -604,13 +607,8 @@ Design a complete architecture and provide the JSON response with all sections f
         Returns:
             Default region string
         """
-        defaults = {
-            CloudPlatform.AWS: "us-east-1",
-            CloudPlatform.AZURE: "eastus",
-            CloudPlatform.GCP: "us-central1",
-            CloudPlatform.ORACLE: "us-ashburn-1"
-        }
-        return defaults.get(cloud_platform, "us-east-1")
+        # Azure-only for POC - default to East US
+        return "eastus"
     
     def _select_azure_services(
         self, requirements: RequirementsOutput
@@ -1416,6 +1414,16 @@ Design a complete architecture and provide the JSON response with all sections f
         
         # Build non-functional requirements
         rto = self._parse_time_value(kg.resiliency_dr.rto_minutes)
+        
+        # Normalize compliance_frameworks to list (can be string or list)
+        compliance_frameworks = kg.security_governance.compliance_frameworks
+        if isinstance(compliance_frameworks, str):
+            compliance_list = [compliance_frameworks] if compliance_frameworks else []
+        elif isinstance(compliance_frameworks, list):
+            compliance_list = compliance_frameworks
+        else:
+            compliance_list = []
+        
         nfr = NonFunctionalRequirements(
             scalability={
                 "target_users": target_users,
@@ -1437,7 +1445,7 @@ Design a complete architecture and provide the JSON response with all sections f
                 "encryption_in_transit": True,
                 "mfa_required": kg.identity_access.mfa_policy == "required",
             },
-            compliance=kg.security_governance.compliance_frameworks,
+            compliance=compliance_list,
         )
         
         # Build technical constraints
@@ -1463,7 +1471,8 @@ Design a complete architecture and provide the JSON response with all sections f
         implied_reqs = []
         
         # From identity domain
-        if kg.identity_access.auth_users and "external_customers" in kg.identity_access.auth_users.lower():
+        auth_users_str = str(kg.identity_access.auth_users) if kg.identity_access.auth_users else ""
+        if kg.identity_access.auth_users and "external_customers" in auth_users_str.lower():
             implied_reqs.append("Requires Azure AD B2C for customer authentication")
         
         # From runtime domain
@@ -1505,7 +1514,7 @@ Design a complete architecture and provide the JSON response with all sections f
         
         # From runtime choices
         if kg.runtime_platform.target_runtime:
-            runtime = kg.runtime_platform.target_runtime.lower()
+            runtime = str(kg.runtime_platform.target_runtime).lower()
             if "aks" in runtime or "kubernetes" in runtime:
                 skills.append("Kubernetes")
             if "app service" in runtime:
@@ -1515,7 +1524,7 @@ Design a complete architecture and provide the JSON response with all sections f
         
         # From database choices
         if kg.data_persistence.primary_db_engine:
-            db = kg.data_persistence.primary_db_engine.lower()
+            db = str(kg.data_persistence.primary_db_engine).lower()
             if "sql" in db:
                 skills.append("SQL Server")
             if "postgres" in db:

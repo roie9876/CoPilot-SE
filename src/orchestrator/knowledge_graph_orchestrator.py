@@ -34,6 +34,7 @@ from src.agents.domain_agents import (
     DataDomainAgent,
 )
 from src.agents.domain_agents.monitoring_agent import MonitoringAgent
+from src.agents.domain_agents.security_agent import SecurityDomainAgent
 from src.orchestrator.intent_extractor import IntentExtractor
 
 
@@ -60,6 +61,7 @@ class KnowledgeGraphOrchestrator:
             "resiliency_dr": ResiliencyDomainAgent(),
             "networking_connectivity": NetworkingDomainAgent(),
             "data_persistence": DataDomainAgent(),
+            "security_governance": SecurityDomainAgent(),
             "monitoring_observability": MonitoringAgent(),
         }
         

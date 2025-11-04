@@ -98,6 +98,42 @@ Generate contextual, relevant questions to understand the user's monitoring need
 - High-traffic app → Custom metrics + advanced alerting
 - Multi-service architecture → Centralized Log Analytics workspace"""
     
+    def _parse_retention_days(self, value: Any) -> int:
+        """
+        Parse log retention days from user input or default.
+        Handles strings, integers, and range formats.
+        
+        Args:
+            value: User input value (could be string, int, or None)
+            
+        Returns:
+            Integer value in days
+        """
+        if value is None:
+            return 30  # Default
+        
+        if isinstance(value, int):
+            return value
+        
+        if isinstance(value, str):
+            value_str = value.strip()
+            
+            # Handle range format: "30_to_90" → take lower bound
+            if '_to_' in value_str or 'to' in value_str:
+                parts = value_str.replace('_to_', ' to ').split(' to ')
+                try:
+                    return int(parts[0].strip())
+                except (ValueError, IndexError):
+                    return 30
+            
+            # Handle direct number
+            try:
+                return int(value_str)
+            except ValueError:
+                return 30
+        
+        return 30  # Fallback
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical monitoring fields.
@@ -164,14 +200,15 @@ Generate contextual, relevant questions to understand the user's monitoring need
         monitoring = graph.monitoring_observability
         
         # Conflict 1: Compliance requirements but short log retention
+        retention_days = self._parse_retention_days(monitoring.log_retention_days)
         if (monitoring.compliance_logging and
             monitoring.log_retention_days and
-            monitoring.log_retention_days < 90):
+            retention_days < 90):
             conflicts.append(Conflict(
                 conflict_id="monitoring_compliance_001",
                 domains_involved=["monitoring_observability", "security_governance"],
                 description=(
-                    f"Compliance logging is required but log retention is only {monitoring.log_retention_days} days. "
+                    f"Compliance logging is required but log retention is only {retention_days} days. "
                     "Most compliance frameworks (SOC 2, HIPAA, PCI-DSS) require at least 90-180 days of audit logs. "
                     "Short retention may cause compliance audit failures."
                 ),

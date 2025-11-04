@@ -194,17 +194,20 @@ Generate contextual questions about networking requirements.
         
         This preserves the original hardcoded logic as a safety net.
         """
-        questions = []
+        conflicts = []
         networking = graph.networking_connectivity
         identity = graph.identity_access
         security = graph.security_governance
         
+        # Convert auth_users to string for safe string operations
+        auth_users_str = str(identity.auth_users) if identity.auth_users else ""
+        
         # Question 1: Public or private exposure?
         if "exposure" in missing_fields:
             # Infer from identity if available
-            if identity.auth_users and "customer" in identity.auth_users.lower():
+            if identity.auth_users and "customer" in auth_users_str.lower():
                 hint = " (External customers typically require public access)"
-            elif identity.auth_users and "internal" in identity.auth_users.lower():
+            elif identity.auth_users and "internal" in auth_users_str.lower():
                 hint = " (Internal employees typically use private access via VPN)"
             else:
                 hint = ""

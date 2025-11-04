@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
-import { Server, Package, DollarSign, AlertCircle } from 'lucide-react';
-import type { ArchitectureOutput } from '../types';
+import { Server, Package, DollarSign, AlertCircle, Save, Download } from 'lucide-react';
+import type { ArchitectureOutput, CostOutput, DocumentationOutput } from '../types';
 
 interface ArchitectureViewProps {
   architecture: ArchitectureOutput;
+  costs?: CostOutput;
+  documentation?: DocumentationOutput;
 }
 
 // Initialize mermaid
@@ -15,7 +17,7 @@ mermaid.initialize({
   flowchart: { curve: 'basis' }
 });
 
-export default function ArchitectureView({ architecture }: ArchitectureViewProps) {
+export default function ArchitectureView({ architecture, costs, documentation }: ArchitectureViewProps) {
   const diagramRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -102,14 +104,64 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
     renderDiagram();
   }, [architecture.architecture_diagram]);
 
+  const handleSaveDesign = () => {
+    const savedDesigns = JSON.parse(localStorage.getItem('copilot-se-designs') || '[]');
+    const newDesign = {
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      architecture,
+      costs,
+      documentation,
+      name: `Design - ${new Date().toLocaleString()}`
+    };
+    savedDesigns.push(newDesign);
+    localStorage.setItem('copilot-se-designs', JSON.stringify(savedDesigns));
+    alert('Design saved successfully with cost and documentation!');
+  };
+
+  const handleExportJSON = () => {
+    const exportData = {
+      architecture,
+      costs,
+      documentation,
+      exported_at: new Date().toISOString()
+    };
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `complete-design-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Architecture Diagram */}
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={handleSaveDesign}
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Save className="w-4 h-4" />
+          <span>Save Design</span>
+        </button>
+        <button
+          onClick={handleExportJSON}
+          className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          <span>Export JSON</span>
+        </button>
+      </div>
+
+      {/* Logical Diagram */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Package className="w-6 h-6 text-blue-600" />
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-            Architecture Diagram
+            Logical Diagram
           </h3>
         </div>
         <div 
@@ -263,24 +315,6 @@ export default function ArchitectureView({ architecture }: ArchitectureViewProps
         </div>
       )}
 
-      {/* Technology Stack */}
-      {architecture.technology_stack && architecture.technology_stack.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            Technology Stack
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {architecture.technology_stack.map((tech, index) => (
-              <span 
-                key={index}
-                className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full text-sm font-medium"
-              >
-                {tech}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

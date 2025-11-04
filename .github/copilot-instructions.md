@@ -1,21 +1,21 @@
 # GitHub Copilot Instructions - Co-Pilot SE
 
-**Project:** Co-Pilot for Solution Engineers (Multi-Cloud Architecture Assistant)  
-**Version:** 2.0 (Multi-Cloud POC)  
-**Date:** November 1, 2025
+**Project:** Co-Pilot for Solution Engineers (Azure Architecture Assistant)  
+**Version:** 2.0 (Azure POC)  
+**Date:** November 4, 2025
 
 ---
 
 ## 🎯 Project Overview
 
-Co-Pilot SE is an AI-powered assistant that helps Solution Engineers design cloud architectures across AWS, GCP, Azure, and Oracle Cloud. It transforms raw customer requirements into complete, multi-cloud solution designs with cost estimates and documentation.
+Co-Pilot SE is an AI-powered assistant that helps Solution Engineers design Azure cloud architectures. It transforms raw customer requirements into complete Azure solution designs with cost estimates and documentation.
 
 ### POC Scope & Constraints
 
 **CRITICAL**: This is a **10-user POC** (8-10 weeks) with specific limitations:
-- ✅ Multi-cloud support: AWS, GCP, Azure, Oracle Cloud (one at a time)
-- ✅ Online-only data: Bing Search API + trusted sources (NO RAG, NO vector database)
-- ✅ 4 specialized agents + 1 orchestrator
+- ✅ Azure-only support (focused on Microsoft Azure)
+- ✅ Online-only data: Bing Search API + Azure docs (NO RAG, NO vector database)
+- ✅ 11 specialized agents (7 domain + 4 workflow) + 2 orchestrators
 - ✅ Web portal (React + TypeScript) + MCP integration
 - ❌ NO document upload capability
 - ❌ NO compliance validation agent (out of scope)
@@ -27,7 +27,7 @@ Co-Pilot SE is an AI-powered assistant that helps Solution Engineers design clou
 1. **No RAG System**: Use real-time Bing Search instead of vector database
 2. **Serverless**: Azure Functions (consumption plan) for all backend
 3. **Simplified**: Minimal infrastructure, stateless for POC
-4. **Multi-cloud**: Unified agent handles all clouds (not separate agents per cloud)
+4. **Azure-Only**: Focused on Azure services and Azure Well-Architected Framework
 5. **MCP as Secondary**: Web portal is primary interface
 
 ---
@@ -181,7 +181,7 @@ def extract_requirements(input_data: RequirementsInput) -> dict:
 ```typescript
 interface ArchitectureRequest {
   requirements: string;
-  targetCloud: 'aws' | 'gcp' | 'azure' | 'oracle';
+  targetCloud: 'azure';  // Azure-only for POC
   region?: string;
 }
 
@@ -267,7 +267,7 @@ async def test_full_workflow():
     orchestrator = MasterOrchestrator()
     
     result = await orchestrator.orchestrate(
-        "Design an AWS e-commerce platform with 10k users"
+        "Design an Azure e-commerce platform with 10k users"
     )
     
     assert result["status"] == "success"
@@ -360,9 +360,9 @@ CoPilot-SE/
 
 1. **NO RAG/Vector Database**: Never generate code for embeddings, vector stores, or similarity search
 2. **Online-Only Data**: Always use Bing Search API or direct HTTP requests to official docs
-3. **Single Cloud at a Time**: Architecture agent handles ONE cloud per request (not multi-cloud hybrid)
+3. **Azure-Only**: Architecture agent handles AZURE ONLY (not multi-cloud, not hybrid)
 4. **Stateless**: No persistent storage of customer data (use in-memory state only)
-5. **4 Agents Only**: Don't create compliance, security, or other agents
+5. **7 Domain Agents**: Identity, Runtime, Networking, Data, Resiliency, Security, Monitoring
 6. **Azure Functions**: All backend code should be compatible with Azure Functions Python 3.11
 7. **Cost Accuracy**: ±30% acceptable for POC (no cloud provider authentication)
 

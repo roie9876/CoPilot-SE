@@ -203,7 +203,7 @@ Generate comprehensive HLD documentation in JSON format."""
             
             # Extract required metadata fields
             meta_data = doc_data.get("metadata", {})
-            target_cloud = requirements.target_cloud if hasattr(requirements, 'target_cloud') else requirements.get('target_cloud', CloudPlatform.AWS)
+            target_cloud = requirements.target_cloud if hasattr(requirements, 'target_cloud') else requirements.get('target_cloud', CloudPlatform.AZURE)
             
             # Create metadata with required fields
             metadata = DocumentMetadata(
