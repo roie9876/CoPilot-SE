@@ -1332,11 +1332,32 @@ Design a complete architecture and provide the JSON response with all sections f
                 f"Handles {kg.data_persistence.pii_sensitivity} data"
             )
         
+        # Helper: Extract numeric user count from auth_users (can be string like "100-500 employees")
+        def extract_user_count(auth_users_value) -> int:
+            """Extract numeric user count from string or return default."""
+            if not auth_users_value:
+                return 1000  # Default
+            
+            if isinstance(auth_users_value, int):
+                return auth_users_value
+            
+            # Parse string like "100-500 employees" or "< 100"
+            import re
+            if isinstance(auth_users_value, str):
+                # Extract first number found
+                numbers = re.findall(r'\d+', auth_users_value)
+                if numbers:
+                    return int(numbers[0])  # Use first number (conservative estimate)
+            
+            return 1000  # Fallback
+        
+        target_users = extract_user_count(kg.identity_access.auth_users)
+        
         # Build non-functional requirements
         nfr = NonFunctionalRequirements(
             scalability={
-                "target_users": kg.identity_access.auth_users or 1000,
-                "concurrent_users": int((kg.identity_access.auth_users or 1000) * 0.1),
+                "target_users": target_users,
+                "concurrent_users": int(target_users * 0.1),
             },
             performance={
                 "latency_requirement": "low" if kg.resiliency_dr.rto_minutes and kg.resiliency_dr.rto_minutes < 60 else "moderate"
@@ -1358,18 +1379,29 @@ Design a complete architecture and provide the JSON response with all sections f
         )
         
         # Build technical constraints
+        # Budget as dict: {"monthly": amount, "currency": "USD"}
+        budget_dict = None
+        if kg.context.intent == Intent.NEW_DEPLOYMENT:
+            budget_dict = {"monthly": 5000, "currency": "USD", "note": "POC budget"}
+        else:
+            budget_dict = {"monthly": 20000, "currency": "USD", "note": "Production budget"}
+        
+        # Existing infrastructure as list
+        infra_description = self._describe_existing_infra(kg)
+        existing_infra_list = [infra_description] if infra_description else []
+        
         constraints = TechnicalConstraints(
-            budget=f"POC budget" if kg.context.intent == Intent.NEW_DEPLOYMENT else "Production budget",
+            budget=budget_dict,
             timeline="8-10 weeks for POC",
             team_skills=self._infer_team_skills(kg),
-            existing_infrastructure=self._describe_existing_infra(kg),
+            existing_infrastructure=existing_infra_list,
         )
         
         # Build implied requirements
         implied_reqs = []
         
         # From identity domain
-        if kg.identity_access.external_customers:
+        if kg.identity_access.auth_users and "external_customers" in kg.identity_access.auth_users.lower():
             implied_reqs.append("Requires Azure AD B2C for customer authentication")
         
         # From runtime domain

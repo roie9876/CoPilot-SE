@@ -362,7 +362,7 @@ class ResiliencyDomainAgent(BaseDomainAgent):
                     "To achieve your RTO target, automated failover is required. "
                     "Should we design for automated failover using Front Door or Traffic Manager health probes?"
                 ),
-                severity="critical"
+                severity="high"  # Changed from critical - Architecture Agent can infer automated failover from RTO
             ))
         
         # Conflict 5: Multi-region but data residency conflicts

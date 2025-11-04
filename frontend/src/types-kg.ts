@@ -84,6 +84,8 @@ export interface KGArchitectureResponse {
   session_id: string;
   status: 'success' | 'error';
   architecture?: ArchitectureOutput;
+  cost_estimate?: any; // TODO: Add proper CostOutput type
+  documentation?: any; // TODO: Add proper DocumentationOutput type
   message?: string;
   error?: string;
 }

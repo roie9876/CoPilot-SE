@@ -614,12 +614,24 @@ async def kg_generate_architecture(request: KGArchitectureRequest):
         if not kg:
             raise HTTPException(status_code=400, detail="No Knowledge Graph in session")
         
+        # Debug: Show readiness status
+        logger.info(f"🔍 KG Status Check:")
+        logger.info(f"  - ready_for_design: {kg.status.ready_for_design}")
+        logger.info(f"  - critical_gaps: {len(kg.status.critical_gaps)}")
+        logger.info(f"  - total_conflicts: {len(kg.status.conflicts)}")
+        critical_conflicts = [c for c in kg.status.conflicts if c.severity == "critical"]
+        logger.info(f"  - critical_conflicts: {len(critical_conflicts)}")
+        
+        # List all critical conflicts
+        for c in critical_conflicts:
+            logger.info(f"    ❌ CRITICAL: {c.conflict_id} - {c.description[:100]}...")
+        
         if not kg.status.ready_for_design:
             raise HTTPException(
                 status_code=400,
                 detail=f"Knowledge Graph not ready for design. "
                        f"Critical gaps: {len(kg.status.critical_gaps)}, "
-                       f"Conflicts: {len(kg.status.conflicts)}"
+                       f"Conflicts: {len(kg.status.conflicts)} ({len(critical_conflicts)} critical)"
             )
         
         logger.info(f"🏗️ Generating architecture from KG (session: {request.session_id})")
@@ -631,14 +643,26 @@ async def kg_generate_architecture(request: KGArchitectureRequest):
         
         logger.info(f"✅ Architecture generated: {len(architecture.services)} services")
         
-        # TODO: Continue with Cost & Documentation stages (Phase 5)
-        # For now, return just architecture
+        # Convert KG to RequirementsOutput (needed for cost & doc stages)
+        requirements = orch.architecture_agent._convert_kg_to_requirements(kg)
+        
+        # Continue with Cost stage
+        logger.info("💰 Running Cost Estimation stage...")
+        cost_output = await orch._execute_cost_stage(requirements, architecture)
+        logger.info(f"✅ Cost estimation complete: ${cost_output.total_monthly_cost_medium}/month")
+        
+        # Continue with Documentation stage
+        logger.info("📝 Running Documentation stage...")
+        documentation = await orch._execute_documentation_stage(requirements, architecture, cost_output)
+        logger.info(f"✅ Documentation complete: HLD generated ({len(documentation.content)} chars)")
         
         return {
             "session_id": request.session_id,
             "status": "success",
             "architecture": architecture.model_dump(),
-            "message": "Architecture generated successfully. Cost & Documentation stages coming in Phase 5!"
+            "cost_estimate": cost_output.model_dump(),
+            "documentation": documentation.model_dump(),
+            "message": "Complete solution design generated successfully!"
         }
         
     except HTTPException:

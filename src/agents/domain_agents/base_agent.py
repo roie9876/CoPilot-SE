@@ -92,6 +92,37 @@ class BaseDomainAgent(ABC):
         """
         pass
     
+    def get_all_missing_fields(self, graph: KnowledgeGraph) -> List[str]:
+        """
+        Get ALL missing fields (both critical AND optional) for low-confidence domains.
+        
+        This is used when a domain's confidence is < 0.8 and we need to ask
+        additional questions to boost confidence, even if all critical fields are filled.
+        
+        Default implementation: Check all fields in the domain object for None values.
+        Subclasses can override for more sophisticated logic.
+        
+        Args:
+            graph: Current state of the Knowledge Graph
+        
+        Returns:
+            List of ALL field names that are None or need clarification
+        """
+        domain_obj = getattr(graph, self.domain_name)
+        missing = []
+        
+        # Check all fields defined in critical_fields and optional_fields
+        all_fields = self.critical_fields + self.optional_fields
+        
+        for field_name in all_fields:
+            if hasattr(domain_obj, field_name):
+                value = getattr(domain_obj, field_name)
+                # Consider None, empty string, or empty list as missing
+                if value is None or value == "" or value == []:
+                    missing.append(field_name)
+        
+        return missing
+    
     @abstractmethod
     def generate_questions(
         self,

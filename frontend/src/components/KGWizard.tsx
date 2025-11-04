@@ -55,6 +55,8 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
 
   // Architecture result
   const [architecture, setArchitecture] = useState<ArchitectureOutput | null>(null);
+  const [costEstimate, setCostEstimate] = useState<any | null>(null);
+  const [documentation, setDocumentation] = useState<any | null>(null);
 
   // Submitting state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,6 +135,8 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       
       if (response.status === 'success' && response.architecture) {
         setArchitecture(response.architecture);
+        setCostEstimate(response.cost_estimate || null);
+        setDocumentation(response.documentation || null);
         setState('complete');
       } else {
         setError(response.error || 'Failed to generate architecture');
@@ -390,6 +394,61 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       </div>
 
       {architecture && <ArchitectureView architecture={architecture} />}
+
+      {/* Cost Estimate Section */}
+      {costEstimate && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">💰 Cost Estimate</h2>
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-sm text-gray-600">Low Usage</div>
+              <div className="text-2xl font-bold text-green-600">
+                ${costEstimate.total_monthly_cost_low?.toFixed(2) || 'N/A'}/mo
+              </div>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="text-sm text-gray-600">Medium Usage</div>
+              <div className="text-2xl font-bold text-blue-600">
+                ${costEstimate.total_monthly_cost_medium?.toFixed(2) || 'N/A'}/mo
+              </div>
+            </div>
+            <div className="text-center p-4 bg-orange-50 rounded-lg">
+              <div className="text-sm text-gray-600">High Usage</div>
+              <div className="text-2xl font-bold text-orange-600">
+                ${costEstimate.total_monthly_cost_high?.toFixed(2) || 'N/A'}/mo
+              </div>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500">Currency: {costEstimate.currency} | Period: {costEstimate.time_period}</p>
+        </div>
+      )}
+
+      {/* Documentation Section */}
+      {documentation && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">📝 High-Level Design Document</h2>
+          <div className="prose max-w-none">
+            <pre className="whitespace-pre-wrap bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
+              {documentation.content}
+            </pre>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => {
+                const blob = new Blob([documentation.content], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'architecture-hld.md';
+                a.click();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Download Markdown
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 

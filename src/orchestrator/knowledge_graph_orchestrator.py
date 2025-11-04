@@ -235,11 +235,20 @@ class KnowledgeGraphOrchestrator:
         domain_obj.confidence = new_confidence
         print(f"  - Confidence updated to {new_confidence:.2f}")
         
+        # CRITICAL FIX: Remove old conflicts from this domain before adding new ones
+        # (Otherwise conflicts that were resolved by new answers still block readiness)
+        kg.status.conflicts = [
+            c for c in kg.status.conflicts 
+            if domain not in c.domains_involved
+        ]
+        
         # Detect conflicts for this domain
         conflicts = agent.detect_conflicts(kg)
         if conflicts:
             print(f"  - Detected {len(conflicts)} conflict(s)")
             kg.status.conflicts.extend(conflicts)
+        else:
+            print(f"  - No new conflicts detected")
         
         # Update critical gaps
         kg.status.critical_gaps = self._compute_critical_gaps(kg)
@@ -411,7 +420,7 @@ class KnowledgeGraphOrchestrator:
             self.domain_order_by_intent[Intent.NEW_DEPLOYMENT],  # Default
         )
         
-        # PRIORITY 1: Check for domains with critical gaps (CHANGED ORDER)
+        # PRIORITY 1: Check for domains with critical gaps
         for domain in domain_order:
             agent = self.domain_agents[domain]
             if not agent.is_relevant_for_intent(kg):
@@ -425,7 +434,23 @@ class KnowledgeGraphOrchestrator:
             else:
                 print(f"[SelectDomain] {domain} has no critical gaps")
         
-        # PRIORITY 2: Check for domains with conflicts (MOVED TO SECOND)
+        # PRIORITY 2: Check for domains with low confidence (< 80%)
+        # IMPORTANT: This must come BEFORE conflicts, because conflicts don't generate questions
+        # but low confidence domains do need additional questions to reach 80% threshold
+        for domain in domain_order:
+            agent = self.domain_agents[domain]
+            if not agent.is_relevant_for_intent(kg):
+                continue
+            
+            domain_obj = getattr(kg, domain)
+            if domain_obj.confidence < 0.8:
+                print(f"[SelectDomain] Selected {domain} - low confidence ({domain_obj.confidence:.2f} < 0.8)")
+                return domain
+            else:
+                print(f"[SelectDomain] {domain} confidence OK ({domain_obj.confidence:.2f})")
+        
+        # PRIORITY 3: Check for domains with conflicts (MOVED TO THIRD)
+        # Note: Conflicts are informational warnings at this stage (critical ones already block)
         domains_with_conflicts = set()
         for conflict in kg.status.conflicts:
             domains_with_conflicts.update(conflict.domains_involved)
@@ -437,16 +462,7 @@ class KnowledgeGraphOrchestrator:
                     print(f"[SelectDomain] Selected {domain} - has unresolved conflicts")
                     return domain
         
-        # PRIORITY 3: Check for domains with low confidence (< 80%)
-        for domain in domain_order:
-            agent = self.domain_agents[domain]
-            if not agent.is_relevant_for_intent(kg):
-                continue
-            
-            domain_obj = getattr(kg, domain)
-            if domain_obj.confidence < 0.8:
-                return domain
-        
+        print("[SelectDomain] All domains complete - no next domain")
         return None
 
     def _detect_all_conflicts(self, kg: KnowledgeGraph) -> List[Conflict]:
@@ -528,7 +544,16 @@ class KnowledgeGraphOrchestrator:
         
         print(f"[GetNextQuestions] Selected domain: {next_domain}")
         agent = self.domain_agents[next_domain]
-        missing_fields = agent.get_missing_critical_fields(kg)
+        
+        # CRITICAL FIX: If domain has low confidence, ask about ALL missing fields (not just critical)
+        domain_obj = getattr(kg, next_domain)
+        if domain_obj.confidence < 0.8:
+            print(f"[GetNextQuestions] Domain has low confidence ({domain_obj.confidence:.2f}) - asking ALL missing fields")
+            missing_fields = agent.get_all_missing_fields(kg)  # Get ALL fields, not just critical
+        else:
+            missing_fields = agent.get_missing_critical_fields(kg)  # Only critical fields
+        
+        print(f"[GetNextQuestions] Generating questions for {len(missing_fields)} missing fields: {missing_fields}")
         questions = agent.generate_questions(missing_fields, kg)
         
         return (next_domain, questions)

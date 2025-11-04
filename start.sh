@@ -34,9 +34,16 @@ fi
 echo "✅ Prerequisites check passed"
 echo ""
 
+# Clear old logs for fresh start
+echo "🧹 Clearing old logs..."
+> api_server.log
+> frontend.log
+echo ""
+
 # Start backend API server in background
 echo "📡 Starting Backend API Server..."
-.venv/bin/python api/server.py > api_server.log 2>&1 &
+# Set PATH to include Homebrew bin (needed for Azure CLI authentication)
+PATH="/opt/homebrew/bin:$PATH" .venv/bin/python api/server.py > api_server.log 2>&1 &
 BACKEND_PID=$!
 echo "   Backend PID: $BACKEND_PID"
 echo "   Backend URL: http://localhost:8000"
