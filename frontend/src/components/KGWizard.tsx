@@ -10,12 +10,16 @@ import type {
   KGAnswerResponse,
   KGArchitectureResponse,
   Conflict,
+  ServiceCost,
+  CostOutput,
+  DocumentationOutput,
 } from '../types-kg';
 import type { ArchitectureOutput } from '../types';
-import { kgStart, kgAnswer, kgArchitecture } from '../api/kg-client';
+import { kgStart, kgAnswer, kgArchitecture, kgValidate } from '../api/kg-client';
 
 type WizardState =
   | 'initial'
+  | 'validating'
   | 'gathering'
   | 'ready'
   | 'generating'
@@ -46,6 +50,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
     data: 0,
     resiliency: 0,
     security: 0,
+    monitoring: 0,
   });
   const [readyForDesign, setReadyForDesign] = useState(false);
   const [criticalGaps, setCriticalGaps] = useState(0);
@@ -55,11 +60,14 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
 
   // Architecture result
   const [architecture, setArchitecture] = useState<ArchitectureOutput | null>(null);
-  const [costEstimate, setCostEstimate] = useState<any | null>(null);
-  const [documentation, setDocumentation] = useState<any | null>(null);
+  const [costEstimate, setCostEstimate] = useState<CostOutput | null>(null);
+  const [documentation, setDocumentation] = useState<DocumentationOutput | null>(null);
 
   // Submitting state
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Expanded service details
+  const [expandedServiceIndex, setExpandedServiceIndex] = useState<number | null>(null);
 
   // Start Knowledge Graph session
   const handleStartSession = async () => {
@@ -68,11 +76,36 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       return;
     }
 
-    setState('gathering');
+    setState('validating');
     setError(null);
     setIsSubmitting(true);
 
     try {
+      // STEP 1: Pre-validate the request
+      console.log('🔍 Validating request...');
+      const validationResult = await kgValidate(requirements);
+      
+      console.log('Validation result:', validationResult);
+      
+      // Check if request is valid
+      if (!validationResult.is_valid) {
+        setError(
+          `❌ ${validationResult.reason}\n\n💡 ${validationResult.suggestion}`
+        );
+        setState('error');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // If confidence is low, warn user but proceed
+      if (validationResult.confidence < 0.7) {
+        console.warn('⚠️ Low validation confidence:', validationResult.confidence);
+      }
+
+      // STEP 2: Start requirements gathering
+      console.log('✅ Request validated, starting KG session...');
+      setState('gathering');
+      
       const response = await kgStart(requirements);
       setSessionId(response.session_id);
       setCurrentDomain(response.domain);
@@ -162,6 +195,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       data: 0,
       resiliency: 0,
       security: 0,
+      monitoring: 0,
     });
     setReadyForDesign(false);
     setCriticalGaps(0);
@@ -436,8 +470,16 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       {/* Cost Estimate Section */}
       {costEstimate && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">💰 Cost Estimate</h2>
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">💰 Cost Estimate</h2>
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">Region:</span> {architecture?.region || 'Not specified'} | 
+              <span className="font-medium ml-2">Cloud:</span> {architecture?.target_cloud || 'Azure'}
+            </div>
+          </div>
+          
+          {/* Total Cost Summary */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-sm text-gray-600">Low Usage</div>
               <div className="text-2xl font-bold text-green-600">
@@ -457,7 +499,170 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
               </div>
             </div>
           </div>
-          <p className="text-sm text-gray-500">Currency: {costEstimate.currency} | Period: {costEstimate.time_period}</p>
+
+          {/* Cost Breakdown by Service */}
+          {costEstimate.service_costs && costEstimate.service_costs.length > 0 && (
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-semibold text-gray-800">Cost Breakdown by Service</h3>
+                <span className="text-xs text-gray-500 italic">
+                  💡 Click any row to see detailed breakdown
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Service
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        SKU/Tier
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Monthly Cost
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        % of Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {costEstimate.service_costs.map((service: ServiceCost, index: number) => {
+                      const monthlyCost = service.medium_usage_monthly || 0;
+                      const percentage = costEstimate.total_monthly_cost_medium 
+                        ? ((monthlyCost / costEstimate.total_monthly_cost_medium) * 100).toFixed(1)
+                        : '0';
+                      const isExpanded = expandedServiceIndex === index;
+                      
+                      // Find matching architecture service to get detailed SKU info
+                      const archService = architecture?.services.find(
+                        s => s.service_name.toLowerCase().includes(service.service_name.toLowerCase()) ||
+                             service.service_name.toLowerCase().includes(s.service_name.toLowerCase())
+                      );
+                      const detailedSKU = archService?.configuration?.sku || 
+                                        archService?.configuration?.instance_type ||
+                                        service.pricing_tier || 
+                                        service.sku || 
+                                        service.tier || 
+                                        'Standard';
+                      const replicas = archService?.configuration?.replicas;
+                      
+                      return (
+                        <>
+                          <tr 
+                            key={index} 
+                            className="hover:bg-gray-50 cursor-pointer transition-colors"
+                            onClick={() => setExpandedServiceIndex(isExpanded ? null : index)}
+                          >
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                              <div className="flex items-center">
+                                <span className="mr-2">
+                                  {isExpanded ? '▼' : '▶'}
+                                </span>
+                                {service.service_name || 'Unknown Service'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              <div className="flex flex-col">
+                                <span>{detailedSKU}</span>
+                                {replicas && replicas > 1 && (
+                                  <span className="text-xs text-gray-400">×{replicas} replicas</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
+                              ${monthlyCost.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-500">
+                              {percentage}%
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr key={`${index}-details`} className="bg-blue-50">
+                              <td colSpan={4} className="px-4 py-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">💰 Cost Breakdown</h4>
+                                    <div className="space-y-1 text-gray-700">
+                                      <div className="flex justify-between">
+                                        <span>Low Usage:</span>
+                                        <span className="font-medium text-green-600">
+                                          ${service.low_usage_monthly?.toFixed(2) || '0.00'}/mo
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Medium Usage:</span>
+                                        <span className="font-medium text-blue-600">
+                                          ${service.medium_usage_monthly?.toFixed(2) || '0.00'}/mo
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>High Usage:</span>
+                                        <span className="font-medium text-orange-600">
+                                          ${service.high_usage_monthly?.toFixed(2) || '0.00'}/mo
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">📋 Service Details</h4>
+                                    <div className="space-y-1 text-gray-700">
+                                      <div><strong>Category:</strong> {service.category || 'N/A'}</div>
+                                      <div><strong>Pricing Model:</strong> {service.pricing_model || 'monthly'}</div>
+                                      <div><strong>SKU/Tier:</strong> {detailedSKU}</div>
+                                      {replicas && replicas > 1 && (
+                                        <div><strong>Replicas:</strong> {replicas}</div>
+                                      )}
+                                      {archService?.configuration?.storage_gb && (
+                                        <div><strong>Storage:</strong> {archService.configuration.storage_gb} GB</div>
+                                      )}
+                                      {archService?.configuration?.auto_scaling && (
+                                        <div><strong>Auto-scaling:</strong> Enabled</div>
+                                      )}
+                                      <div><strong>Region:</strong> {architecture?.region || 'Not specified'}</div>
+                                    </div>
+                                  </div>
+                                  {service.pricing_url && (
+                                    <div className="col-span-2 mt-2">
+                                      <a 
+                                        href={service.pricing_url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline text-xs"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        🔗 View Official Pricing Documentation
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td colSpan={2} className="px-4 py-3 text-sm font-bold text-gray-900">
+                        Total (Medium Usage)
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-blue-600">
+                        ${costEstimate.total_monthly_cost_medium?.toFixed(2) || '0.00'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-bold text-gray-900">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <p className="text-sm text-gray-500 mt-4">Currency: {costEstimate.currency} | Period: {costEstimate.time_period}</p>
         </div>
       )}
 
@@ -498,14 +703,37 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-4xl">❌</span>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Invalid Request</h2>
+          <div className="text-left max-w-xl mx-auto mb-6 space-y-3">
+            {error?.split('\n\n').map((paragraph, idx) => (
+              <p key={idx} className="text-gray-700 whitespace-pre-line">
+                {paragraph}
+              </p>
+            ))}
+          </div>
           <button
             onClick={handleReset}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Start Over
+            Try Again
           </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render validating state
+  const renderValidating = () => (
+    <div className="max-w-3xl mx-auto">
+      <div className="bg-white rounded-lg shadow-md p-8">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <span className="text-4xl">🔍</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Validating Request</h2>
+          <p className="text-gray-600">
+            Checking if your request is architecture-related...
+          </p>
         </div>
       </div>
     </div>
@@ -515,6 +743,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       {state === 'initial' && renderInitialForm()}
+      {state === 'validating' && renderValidating()}
       {state === 'gathering' && renderGathering()}
       {state === 'ready' && renderReady()}
       {state === 'generating' && renderGenerating()}

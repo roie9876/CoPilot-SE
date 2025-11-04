@@ -66,6 +66,50 @@ class IdentityDomainAgent(BaseDomainAgent):
             "compliance_identity_constraints",
         ]
     
+    def generate_expert_system_prompt(self) -> str:
+        """
+        Generate identity/security expert system prompt for LLM.
+        
+        Returns:
+            Expert system prompt with deep Azure AD knowledge
+        """
+        return """You are an expert Microsoft Azure identity and security architect specializing in Azure AD (Entra ID) and access control.
+
+**YOUR EXPERTISE:**
+1. **Azure Active Directory (Entra ID)**: Tenants, users, groups, roles, directory management
+2. **Authentication**: OAuth 2.0, OpenID Connect, SAML, MFA, passwordless
+3. **Authorization**: RBAC, Azure AD roles, custom roles, PIM
+4. **Identity Protection**: Conditional Access, Identity Protection, risk-based policies
+5. **B2B/B2C**: External identities, guest access, customer identity management
+6. **Compliance**: Zero Trust, least privilege, audit logs
+
+**CRITICAL KNOWLEDGE:**
+- **MFA is required** for production workloads (compliance baseline)
+- **Azure AD vs Azure AD B2C** (internal employees vs customer-facing apps)
+- **RBAC assignment** (subscription, resource group, resource level scope)
+- **Service Principal vs Managed Identity** (apps need identities, Managed Identity is preferred)
+- **Conditional Access policies** for zero trust security model
+- **PIM (Privileged Identity Management)** for admin access
+
+**YOUR ROLE:**
+Generate contextual questions about identity and access requirements.
+
+**CRITICAL RULES:**
+1. If user mentioned "customers" or "public users", ask about Azure AD B2C
+2. If user mentioned "employees only" or "internal", ask about internal Azure AD
+3. If user mentioned "compliance", ask about MFA and Conditional Access
+4. If user mentioned "apps" or "services" or "APIs", ask about Managed Identity
+5. If user mentioned "admins", ask about PIM and privileged access
+6. Always explain security best practices (zero trust, least privilege)
+7. Reference Microsoft security baseline
+
+**IDENTITY PATTERNS:**
+- Internal apps → Azure AD + MFA + RBAC + Managed Identity
+- Customer-facing → Azure AD B2C + social logins + custom policies
+- APIs → Managed Identity + OAuth 2.0 + API Management
+- Admins → Azure AD + PIM + MFA + Conditional Access
+- B2B partners → Azure AD B2B + guest access + external collaboration"""
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical identity fields.
@@ -99,13 +143,41 @@ class IdentityDomainAgent(BaseDomainAgent):
         graph: KnowledgeGraph
     ) -> List[DomainAgentQuestion]:
         """
-        Generate identity-related questions for missing fields.
+        Generate adaptive questions for identity using LLM + domain knowledge.
         
-        Questions are context-aware:
-        - Greenfield: Ask about new tenant creation
-        - Brownfield: Ask about existing tenant constraints
-        - Public app: Focus on external auth
-        - Internal app: Focus on employee auth
+        This method now:
+        1. Searches Microsoft documentation for identity/security best practices
+        2. Uses LLM to generate contextual questions
+        3. Falls back to hardcoded templates if LLM fails
+        """
+        # Try LLM-powered generation first
+        try:
+            llm_questions = self.generate_contextual_questions_with_llm(
+                graph=graph,
+                missing_fields=missing_fields
+            )
+            
+            if llm_questions:
+                self.logger.info(
+                    f"Generated {len(llm_questions)} LLM-powered questions for identity"
+                )
+                return llm_questions
+        
+        except Exception as e:
+            self.logger.warning(f"LLM question generation failed: {e}, using templates")
+        
+        # Fallback to templates
+        return self._fallback_to_template_questions(graph, missing_fields)
+    
+    def _fallback_to_template_questions(
+        self,
+        graph: KnowledgeGraph,
+        missing_fields: List[str]
+    ) -> List[DomainAgentQuestion]:
+        """
+        Fallback to hardcoded template questions if LLM fails.
+        
+        This preserves the original hardcoded logic as a safety net.
         """
         questions = []
         identity = graph.identity_access

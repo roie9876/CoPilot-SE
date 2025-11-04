@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Loader2, Cloud, FileText, DollarSign, CheckCircle2 } from 'lucide-react';
-import RequirementsForm from './components/RequirementsForm';
 import ArchitectureView from './components/ArchitectureView';
 import CostView from './components/CostView';
 import DocumentationView from './components/DocumentationView';
@@ -32,10 +31,9 @@ function App() {
   // Progressive multi-turn state
   const [currentRound, setCurrentRound] = useState(1);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
-  
-  // Knowledge Graph wizard state
-  const [useKGWizard, setUseKGWizard] = useState(true); // NEW: Toggle for KG wizard
 
+  // Legacy submit handler (kept for reference, not currently used)
+  // @ts-expect-error - unused variable kept for reference
   const handleSubmit = async (requirements: string) => {
     console.log('handleSubmit called with:', requirements);
     setLoading(true);

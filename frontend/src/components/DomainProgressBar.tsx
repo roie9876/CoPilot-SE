@@ -21,6 +21,7 @@ const DomainProgressBar: React.FC<DomainProgressBarProps> = ({
     'data',
     'resiliency',
     'security',
+    'monitoring',
   ] as const;
 
   const getStatusIcon = (confidence: number) => {
@@ -61,7 +62,7 @@ const DomainProgressBar: React.FC<DomainProgressBarProps> = ({
       <div className="space-y-4">
         {domains.map((domain) => {
           const confidence = domainConfidence[domain] || 0;
-          const isActive = currentDomain === `${domain}_access` || currentDomain === `${domain}_platform` || currentDomain === `${domain}_connectivity` || currentDomain === `${domain}_persistence` || currentDomain === `${domain}_dr` || currentDomain === `${domain}_governance`;
+          const isActive = currentDomain === `${domain}_access` || currentDomain === `${domain}_platform` || currentDomain === `${domain}_connectivity` || currentDomain === `${domain}_persistence` || currentDomain === `${domain}_dr` || currentDomain === `${domain}_governance` || currentDomain === `${domain}_observability`;
           const domainColor = DOMAIN_COLORS[domain];
 
           return (

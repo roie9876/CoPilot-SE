@@ -85,6 +85,50 @@ class RuntimeDomainAgent(BaseDomainAgent):
             "deployment_style",
         ]
     
+    def generate_expert_system_prompt(self) -> str:
+        """
+        Generate runtime platform expert system prompt for LLM.
+        
+        Returns:
+            Expert system prompt with deep Azure compute knowledge
+        """
+        return """You are an expert Microsoft Azure Solutions Architect specializing in compute platforms and container orchestration.
+
+**YOUR EXPERTISE:**
+1. **Azure Kubernetes Service (AKS)**: Deep knowledge of CNI plugins, network policies, ingress controllers
+2. **App Service**: Web Apps, API Apps, containers, deployment slots
+3. **Azure Functions**: Serverless compute, consumption vs premium plans
+4. **Virtual Machines**: VM Scale Sets, availability sets, managed disks
+5. **Container Services**: Azure Container Instances, Container Apps
+
+**CRITICAL KNOWLEDGE (AKS):**
+- **CNI Plugin is IRREVERSIBLE** after cluster creation!
+  - Azure CNI Overlay (RECOMMENDED): Good performance + IP efficiency, only nodes use VNet IPs
+  - Azure CNI: Best performance but requires LARGE subnet (/22 or /23 for 256+ IPs)
+  - Kubenet: Legacy, saves IPs but adds network hop
+- Network Policy is also IRREVERSIBLE (Azure Network Policy, Calico, Cilium)
+- Private vs Public cluster affects management connectivity
+
+**YOUR ROLE:**
+Generate contextual, relevant questions to understand the user's runtime requirements.
+
+**CRITICAL RULES:**
+1. If user mentioned "VM" or "virtual machine", DON'T ask about Kubernetes/containers
+2. If user mentioned "AKS" or "Kubernetes", ask about CNI and networking
+3. If user mentioned "serverless", DON'T ask about VMs or containers
+4. If user mentioned "containerized" or "Docker", ask about orchestration (AKS vs App Service)
+5. Always explain WHY you're asking (educate the user)
+6. Reference Microsoft documentation when available
+7. Mark IRREVERSIBLE decisions clearly (CNI, network policy)
+
+**WORKLOAD PATTERNS:**
+- Monolithic app → App Service (simplest)
+- Microservices (5+) → AKS (orchestration needed)
+- Few services (2-4) → App Service or Container Instances
+- Event-driven → Azure Functions
+- Legacy/special OS → Virtual Machines
+- IoT/edge → IoT Edge, Container Instances, or VMs"""
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical runtime fields.
@@ -120,12 +164,46 @@ class RuntimeDomainAgent(BaseDomainAgent):
         graph: KnowledgeGraph
     ) -> List[DomainAgentQuestion]:
         """
-        Generate runtime-related questions for missing fields.
+        Generate adaptive questions for runtime platform using LLM + domain knowledge.
         
-        Questions adapt to:
-        - Workload type (web app vs API vs microservices)
-        - Brownfield vs greenfield
-        - Developer experience level
+        This method now:
+        1. Searches Microsoft documentation for runtime best practices
+        2. Uses LLM to generate contextual questions
+        3. Falls back to hardcoded templates if LLM fails
+        
+        Only asks about:
+        - target_runtime (if unknown)
+        - containerized (if relevant and unknown)
+        - aks_cni (ONLY if using AKS and unknown)
+        """
+        # Try LLM-powered generation first
+        try:
+            llm_questions = self.generate_contextual_questions_with_llm(
+                graph=graph,
+                missing_fields=missing_fields
+            )
+            
+            if llm_questions:
+                self.logger.info(
+                    f"Generated {len(llm_questions)} LLM-powered questions for runtime"
+                )
+                return llm_questions
+        
+        except Exception as e:
+            self.logger.warning(f"LLM question generation failed: {e}, using templates")
+        
+        # Fallback to templates
+        return self._fallback_to_template_questions(graph, missing_fields)
+    
+    def _fallback_to_template_questions(
+        self,
+        graph: KnowledgeGraph,
+        missing_fields: List[str]
+    ) -> List[DomainAgentQuestion]:
+        """
+        Fallback to hardcoded template questions if LLM fails.
+        
+        This preserves the original hardcoded logic as a safety net.
         """
         questions = []
         runtime = graph.runtime_platform

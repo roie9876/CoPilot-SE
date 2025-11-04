@@ -22,6 +22,7 @@ export interface DomainConfidence {
   data: number;
   resiliency: number;
   security: number;
+  monitoring: number;
 }
 
 export interface Conflict {
@@ -30,6 +31,17 @@ export interface Conflict {
   description: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   detected_at?: string;
+}
+
+export interface KGValidateRequest {
+  requirements: string;
+}
+
+export interface KGValidateResponse {
+  is_valid: boolean;
+  confidence: number;
+  reason: string;
+  suggestion: string;
 }
 
 export interface KGStartRequest {
@@ -80,12 +92,43 @@ export interface KGArchitectureRequest {
   session_id: string;
 }
 
+export interface ServiceCost {
+  service_name: string;
+  category?: string;
+  pricing_model?: string;
+  low_usage_monthly: number;
+  medium_usage_monthly: number;
+  high_usage_monthly: number;
+  pricing_tier?: string;
+  pricing_url?: string;
+  // Legacy fields for backward compatibility
+  sku?: string;
+  tier?: string;
+}
+
+export interface CostOutput {
+  total_monthly_cost_low: number;
+  total_monthly_cost_medium: number;
+  total_monthly_cost_high: number;
+  currency: string;
+  time_period: string;
+  service_costs: ServiceCost[];
+  assumptions?: string[];
+  citations?: string[];
+}
+
+export interface DocumentationOutput {
+  content: string;
+  format: string;
+  sections?: string[];
+}
+
 export interface KGArchitectureResponse {
   session_id: string;
   status: 'success' | 'error';
   architecture?: ArchitectureOutput;
-  cost_estimate?: any; // TODO: Add proper CostOutput type
-  documentation?: any; // TODO: Add proper DocumentationOutput type
+  cost_estimate?: CostOutput;
+  documentation?: DocumentationOutput;
   message?: string;
   error?: string;
 }
@@ -98,6 +141,7 @@ export const DOMAIN_NAMES: Record<string, string> = {
   data: 'Data Persistence',
   resiliency: 'Resiliency & DR',
   security: 'Security & Governance',
+  monitoring: 'Monitoring & Observability',
 };
 
 // Domain colors for UI
@@ -108,4 +152,5 @@ export const DOMAIN_COLORS: Record<string, string> = {
   data: '#F59E0B', // amber-500
   resiliency: '#EF4444', // red-500
   security: '#EC4899', // pink-500
+  monitoring: '#06B6D4', // cyan-500
 };

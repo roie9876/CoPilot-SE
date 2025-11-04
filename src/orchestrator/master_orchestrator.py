@@ -321,6 +321,7 @@ class MasterOrchestrator:
                         "networking": kg.networking_connectivity.confidence,
                         "data": kg.data_persistence.confidence,
                         "resiliency": kg.resiliency_dr.confidence,
+                        "monitoring": kg.monitoring_observability.confidence,
                         "security": kg.security_governance.confidence,
                     }
                 }
@@ -351,6 +352,19 @@ class MasterOrchestrator:
                     "options": q.get("options", []),
                 })
             
+            # Build domain confidence dict
+            domain_confidence_dict = {
+                "identity": kg.identity_access.confidence,
+                "runtime": kg.runtime_platform.confidence,
+                "networking": kg.networking_connectivity.confidence,
+                "data": kg.data_persistence.confidence,
+                "resiliency": kg.resiliency_dr.confidence,
+                "monitoring": kg.monitoring_observability.confidence,
+                "security": kg.security_governance.confidence,
+            }
+            
+            self.logger.info(f"📊 Domain confidence: {domain_confidence_dict}")
+            
             return {
                 "status": "needs_clarification",
                 "domain": domain,
@@ -359,14 +373,7 @@ class MasterOrchestrator:
                 "ready_for_design": False,
                 "critical_gaps": len(kg.status.critical_gaps),
                 "conflicts": len(kg.status.conflicts),
-                "domain_confidence": {
-                    "identity": kg.identity_access.confidence,
-                    "runtime": kg.runtime_platform.confidence,
-                    "networking": kg.networking_connectivity.confidence,
-                    "data": kg.data_persistence.confidence,
-                    "resiliency": kg.resiliency_dr.confidence,
-                    "security": kg.security_governance.confidence,
-                }
+                "domain_confidence": domain_confidence_dict,
             }
             
         except Exception as e:
@@ -421,6 +428,15 @@ class MasterOrchestrator:
                     "kg": updated_kg,
                     "ready_for_design": True,
                     "confidence": self._calculate_kg_confidence(updated_kg),
+                    "domain_confidence": {
+                        "identity": updated_kg.identity_access.confidence,
+                        "runtime": updated_kg.runtime_platform.confidence,
+                        "networking": updated_kg.networking_connectivity.confidence,
+                        "data": updated_kg.data_persistence.confidence,
+                        "resiliency": updated_kg.resiliency_dr.confidence,
+                        "monitoring": updated_kg.monitoring_observability.confidence,
+                        "security": updated_kg.security_governance.confidence,
+                    },
                 }
             
             # Get next questions
@@ -433,6 +449,15 @@ class MasterOrchestrator:
                     "kg": updated_kg,
                     "ready_for_design": True,
                     "confidence": self._calculate_kg_confidence(updated_kg),
+                    "domain_confidence": {
+                        "identity": updated_kg.identity_access.confidence,
+                        "runtime": updated_kg.runtime_platform.confidence,
+                        "networking": updated_kg.networking_connectivity.confidence,
+                        "data": updated_kg.data_persistence.confidence,
+                        "resiliency": updated_kg.resiliency_dr.confidence,
+                        "monitoring": updated_kg.monitoring_observability.confidence,
+                        "security": updated_kg.security_governance.confidence,
+                    },
                 }
             
             # Transform questions to match frontend schema
@@ -446,6 +471,19 @@ class MasterOrchestrator:
                     "options": q.get("options", []),
                 })
             
+            # Build domain confidence dict
+            domain_confidence_dict = {
+                "identity": updated_kg.identity_access.confidence,
+                "runtime": updated_kg.runtime_platform.confidence,
+                "networking": updated_kg.networking_connectivity.confidence,
+                "data": updated_kg.data_persistence.confidence,
+                "resiliency": updated_kg.resiliency_dr.confidence,
+                "monitoring": updated_kg.monitoring_observability.confidence,
+                "security": updated_kg.security_governance.confidence,
+            }
+            
+            self.logger.info(f"📊 Domain confidence: {domain_confidence_dict}")
+            
             return {
                 "status": "needs_clarification",
                 "domain": next_domain,
@@ -454,6 +492,8 @@ class MasterOrchestrator:
                 "ready_for_design": False,
                 "critical_gaps": len(updated_kg.status.critical_gaps),
                 "conflicts": len(updated_kg.status.conflicts),
+                "domain_confidence": domain_confidence_dict,
+                "confidence": self._calculate_kg_confidence(updated_kg),
             }
             
         except Exception as e:

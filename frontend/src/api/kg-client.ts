@@ -7,6 +7,8 @@ import type {
   KGStatusResponse,
   KGArchitectureRequest,
   KGArchitectureResponse,
+  KGValidateRequest,
+  KGValidateResponse,
 } from '../types-kg';
 import type { ApiError } from '../types';
 
@@ -20,6 +22,23 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+/**
+ * Validate user request before starting requirements gathering
+ */
+export async function kgValidate(requirements: string): Promise<KGValidateResponse> {
+  try {
+    const request: KGValidateRequest = { requirements };
+    const response = await apiClient.post<KGValidateResponse>('/api/kg/validate', request);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const apiError = error.response?.data as ApiError;
+      throw new Error(apiError?.error || error.message || 'Failed to validate request');
+    }
+    throw error;
+  }
+}
 
 /**
  * Start Knowledge Graph requirements gathering session

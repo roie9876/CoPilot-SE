@@ -12,6 +12,8 @@ import uvicorn
 import sys
 import logging
 import traceback
+import json
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -429,9 +431,129 @@ class KGAnswerRequest(BaseModel):
     answers: Dict[str, Any] = Field(..., description="Answers as {field_name: value}")
 
 
+class KGValidateRequest(BaseModel):
+    """Request to validate if input is architecture-related"""
+    requirements: str = Field(..., min_length=3, description="User input to validate")
+
+
+class KGValidateResponse(BaseModel):
+    """Response from validation check"""
+    is_valid: bool = Field(..., description="True if request is cloud architecture related")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
+    reason: str = Field(..., description="Explanation of validation result")
+    suggestion: str = Field(default="", description="Suggestion if invalid")
+
+
 class KGArchitectureRequest(BaseModel):
     """Request to generate architecture from completed KG"""
     session_id: str = Field(..., description="Session ID with complete KG")
+
+
+@app.post("/api/kg/validate", response_model=KGValidateResponse, tags=["Knowledge Graph"])
+async def kg_validate(request: KGValidateRequest):
+    """
+    Pre-validate user input before starting requirements gathering.
+    
+    This prevents misuse by filtering out non-architecture requests like:
+    - Unrelated topics (cooking, sports, general questions)
+    - Malicious prompts
+    - Empty or nonsensical input
+    
+    Returns:
+        - is_valid: Whether the request is architecture-related
+        - confidence: How confident the validation is (0.0-1.0)
+        - reason: Explanation of the decision
+        - suggestion: What to do if invalid
+    """
+    try:
+        logger.info(f"🔍 Validating request: {request.requirements[:100]}...")
+        
+        orch = get_orchestrator()
+        
+        # Use a lightweight LLM call for validation
+        validation_prompt = f"""You are a request validator for a cloud architecture design system.
+
+Analyze this user request and determine if it's related to cloud architecture, cloud infrastructure, or software system design.
+
+User Request: "{request.requirements}"
+
+VALID requests include:
+- Cloud architecture design (AWS, Azure, GCP, Oracle)
+- Infrastructure requirements
+- Application deployment needs
+- System scalability/performance questions
+- Security/compliance architecture
+- Microservices, containers, serverless
+- Database, storage, networking design
+- CI/CD, DevOps, cloud migration
+
+INVALID requests include:
+- Cooking, recipes, food
+- Sports, entertainment, general knowledge
+- Personal advice, health, finance
+- Homework help (non-technical)
+- Malicious/harmful content
+- Empty, nonsensical, or gibberish input
+
+Respond ONLY with valid JSON in this exact format:
+{{
+  "is_valid": true/false,
+  "confidence": 0.0-1.0,
+  "reason": "Brief explanation",
+  "suggestion": "If invalid, suggest what user should ask instead"
+}}
+
+Examples:
+- "I want to make ice cream" → {{"is_valid": false, "confidence": 0.95, "reason": "Request is about cooking/food, not cloud architecture", "suggestion": "Try asking about cloud infrastructure, like 'Design an Azure web application' or 'Create an AWS microservices architecture'"}}
+- "Design AKS cluster for e-commerce" → {{"is_valid": true, "confidence": 0.98, "reason": "Request is about Kubernetes cloud architecture", "suggestion": ""}}
+- "asdfghjkl" → {{"is_valid": false, "confidence": 0.99, "reason": "Input appears to be gibberish", "suggestion": "Please provide a clear cloud architecture requirement"}}
+"""
+
+        # Quick LLM call (no Bing, no multi-agent)
+        from src.services.openai_client import AzureOpenAIClient
+        ai_client = AzureOpenAIClient()
+        
+        response_text = ai_client.generate_completion(
+            messages=[{"role": "user", "content": validation_prompt}],
+            temperature=0.1,  # Low temp for consistent validation
+            max_tokens=300
+        )
+        
+        # Parse JSON response
+        # Extract JSON from markdown code blocks if present
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(1)
+        
+        result = json.loads(response_text)
+        
+        logger.info(f"✅ Validation result: {result['is_valid']} (confidence: {result['confidence']})")
+        
+        return KGValidateResponse(
+            is_valid=result["is_valid"],
+            confidence=result["confidence"],
+            reason=result["reason"],
+            suggestion=result.get("suggestion", "")
+        )
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Failed to parse validation response: {str(e)}")
+        # Fail open - allow request if validation fails
+        return KGValidateResponse(
+            is_valid=True,
+            confidence=0.5,
+            reason="Validation check failed, proceeding with request",
+            suggestion=""
+        )
+    except Exception as e:
+        logger.error(f"❌ Validation failed: {str(e)}\n{traceback.format_exc()}")
+        # Fail open - allow request if validation fails
+        return KGValidateResponse(
+            is_valid=True,
+            confidence=0.5,
+            reason="Validation service unavailable, proceeding with request",
+            suggestion=""
+        )
 
 
 @app.post("/api/kg/start", tags=["Knowledge Graph"])
@@ -472,6 +594,9 @@ async def kg_start(request: KGStartRequest):
         logger.info(f"✅ KG session created: {session_id}")
         logger.info(f"📊 Status: {result['status']}, Domain: {result.get('domain', 'N/A')}")
         
+        domain_conf = result.get("domain_confidence", {})
+        logger.info(f"📊 Domain confidence from orchestrator: {domain_conf}")
+        
         return {
             "session_id": session_id,
             "status": result["status"],
@@ -480,7 +605,7 @@ async def kg_start(request: KGStartRequest):
             "ready_for_design": result.get("ready_for_design", False),
             "critical_gaps": result.get("critical_gaps", 0),
             "conflicts": result.get("conflicts", 0),
-            "domain_confidence": result.get("domain_confidence", {}),
+            "domain_confidence": domain_conf,
             "overall_confidence": result.get("confidence", 0.0),
         }
         
@@ -523,6 +648,9 @@ async def kg_answer(request: KGAnswerRequest):
         
         logger.info(f"✅ KG updated - Status: {result['status']}")
         
+        domain_conf = result.get("domain_confidence", {})
+        logger.info(f"📊 Domain confidence from orchestrator: {domain_conf}")
+        
         return {
             "session_id": request.session_id,
             "status": result["status"],
@@ -531,7 +659,7 @@ async def kg_answer(request: KGAnswerRequest):
             "ready_for_design": result.get("ready_for_design", False),
             "critical_gaps": result.get("critical_gaps", 0),
             "conflicts": result.get("conflicts", 0),
-            "domain_confidence": result.get("domain_confidence", {}),
+            "domain_confidence": domain_conf,
             "overall_confidence": result.get("confidence", 0.0),
         }
         
@@ -574,6 +702,7 @@ async def kg_status(session_id: str):
                 "networking": kg.networking_connectivity.confidence,
                 "data": kg.data_persistence.confidence,
                 "resiliency": kg.resiliency_dr.confidence,
+                "monitoring": kg.monitoring_observability.confidence,
                 "security": kg.security_governance.confidence,
             },
             "conflicts_detail": [

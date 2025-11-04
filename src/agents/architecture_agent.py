@@ -197,7 +197,44 @@ class ArchitectureAgent:
         """Initialize Architecture Agent with Agent Framework and Bing."""
         self.logger = logging.getLogger(__name__)
         self.client = AgentFrameworkClient()
+    
+    def _parse_time_value(self, value) -> int:
+        """
+        Parse RTO/RPO time values that may be ranges or single integers.
         
+        Examples:
+            "15" -> 15
+            "15_to_60" -> 15 (use lower bound)
+            "0" -> 0
+        
+        Args:
+            value: String or int time value
+        
+        Returns:
+            Integer value (lower bound if range)
+        """
+        if value is None:
+            return None
+        
+        if isinstance(value, int):
+            return value
+        
+        value_str = str(value).strip()
+        
+        if "_to_" in value_str:
+            value_str = value_str.split("_to_")[0]
+        
+        if "-" in value_str and value_str[0] != "-":
+            value_str = value_str.split("-")[0]
+        
+        try:
+            return int(value_str)
+        except (ValueError, AttributeError):
+            self.logger.warning(f"⚠️ Could not parse time value: {value}, returning None")
+            return None
+    
+    def _init_instructions(self):
+        """Initialize system instructions for multi-cloud architecture design."""
         # System instructions for multi-cloud architecture design
         self.instructions = """You are a Multi-Cloud Architecture Design Agent with expertise in AWS, Azure, GCP, and Oracle Cloud.
 
@@ -261,10 +298,16 @@ Your task is to design cloud architectures based on customer requirements.
 
 **USE BING SEARCH TO:**
 - Find latest cloud service documentation
-- Research pricing and SKU options
+- Research pricing and SKU options (get EXACT SKU names like "Standard_D2s_v3", "VpnGw1", NOT generic terms)
 - Verify service availability in regions
 - Check compliance certifications
 - Find best practice guides
+
+**CRITICAL FOR SKU NAMES:**
+- For Azure VMs/AKS: Use exact VM sizes (e.g., "Standard_D2s_v3", "Standard_B2s", NOT just "Standard")
+- For VPN Gateway: Use exact SKU (e.g., "VpnGw1", "VpnGw2", NOT just "Standard")
+- For SQL Database: Use exact tier (e.g., "GP_Gen5_2", "BC_Gen5_4", NOT just "Standard")
+- For App Service: Use exact plan (e.g., "B1", "S1", "P1v2", NOT just "Basic" or "Standard")
 
 **OUTPUT JSON FORMAT:**
 ```json
@@ -274,8 +317,14 @@ Your task is to design cloud architectures based on customer requirements.
       "name": "Service Name",
       "category": "compute|storage|database|networking|security|monitoring",
       "purpose": "What this service does in the architecture",
-      "sku": "Recommended SKU/tier",
-      "configuration": {"key": "value"},
+      "sku": "SPECIFIC SKU (e.g., Standard_D2s_v3, VpnGw1, NOT just 'Standard')",
+      "configuration": {
+        "sku": "SPECIFIC SKU name (e.g., Standard_D2s_v3, VpnGw1)",
+        "instance_type": "VM size or instance type (e.g., Standard_D2s_v3)",
+        "replicas": 1,
+        "storage_gb": 100,
+        "auto_scaling": {"enabled": true, "min": 1, "max": 10}
+      },
       "alternatives": ["Alternative 1", "Alternative 2"],
       "rationale": "Why this service was chosen"
     }
@@ -473,10 +522,22 @@ Design a complete architecture and provide the JSON response with all sections f
         # Parse services FIRST (needed for diagram validation)
         services = []
         for svc_data in arch_data.get("services", []):
+            # Extract configuration if provided by AI
+            config_data = svc_data.get("configuration", {})
+            config = ServiceConfiguration(
+                sku=svc_data.get("sku") or config_data.get("sku"),
+                instance_type=config_data.get("instance_type"),
+                replicas=config_data.get("replicas", 1),
+                storage_gb=config_data.get("storage_gb"),
+                auto_scaling=config_data.get("auto_scaling"),
+                additional_settings=config_data.get("additional_settings", {})
+            )
+            
             svc = ServiceSelection(
                 service_name=svc_data.get("name", svc_data.get("service_name", "Unknown Service")),
                 category=svc_data.get("category", "other"),
                 rationale=svc_data.get("rationale", "Selected for this architecture"),
+                configuration=config,
                 alternatives=svc_data.get("alternatives", [])
             )
             
@@ -1354,13 +1415,14 @@ Design a complete architecture and provide the JSON response with all sections f
         target_users = extract_user_count(kg.identity_access.auth_users)
         
         # Build non-functional requirements
+        rto = self._parse_time_value(kg.resiliency_dr.rto_minutes)
         nfr = NonFunctionalRequirements(
             scalability={
                 "target_users": target_users,
                 "concurrent_users": int(target_users * 0.1),
             },
             performance={
-                "latency_requirement": "low" if kg.resiliency_dr.rto_minutes and kg.resiliency_dr.rto_minutes < 60 else "moderate"
+                "latency_requirement": "low" if rto and rto < 60 else "moderate"
             },
             availability={
                 "target_uptime": "99.9%" if kg.resiliency_dr.multi_region else "99%",

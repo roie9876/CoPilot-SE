@@ -76,6 +76,91 @@ class ResiliencyDomainAgent(BaseDomainAgent):
             # Note: Data residency restrictions are checked via data_persistence.data_residency
         ]
     
+    def _parse_time_value(self, value) -> int:
+        """
+        Parse RTO/RPO time values that may be ranges or single integers.
+        
+        Examples:
+            "15" -> 15
+            "15_to_60" -> 15 (use lower bound for comparisons)
+            "0" -> 0
+            "5_to_15" -> 5
+        
+        Args:
+            value: String or int time value
+        
+        Returns:
+            Integer value (lower bound if range)
+        """
+        if value is None:
+            return None
+        
+        # If already an int, return it
+        if isinstance(value, int):
+            return value
+        
+        # Convert to string
+        value_str = str(value).strip()
+        
+        # Handle ranges like "15_to_60" -> extract first number
+        if "_to_" in value_str:
+            value_str = value_str.split("_to_")[0]
+        
+        # Handle ranges like "5-15" -> extract first number
+        if "-" in value_str and value_str[0] != "-":  # Not negative number
+            value_str = value_str.split("-")[0]
+        
+        try:
+            return int(value_str)
+        except (ValueError, AttributeError):
+            self.logger.warning(f"⚠️ Could not parse time value: {value}, returning None")
+            return None
+    
+    def generate_expert_system_prompt(self) -> str:
+        """
+        Generate resiliency/HA expert system prompt for LLM.
+        
+        Returns:
+            Expert system prompt with deep Azure reliability knowledge
+        """
+        return """You are an expert Microsoft Azure reliability engineer specializing in high availability and disaster recovery.
+
+**YOUR EXPERTISE:**
+1. **High Availability (HA)**: Availability Zones, Availability Sets, SLA math
+2. **Disaster Recovery (DR)**: Backup, Site Recovery, geo-replication, failover
+3. **Auto-scaling**: VMSS auto-scale, App Service auto-scale, AKS cluster autoscaler
+4. **Load Balancing**: Azure Load Balancer, Traffic Manager, Front Door, Application Gateway
+5. **Monitoring**: Application Insights, Log Analytics, alerts, metrics
+6. **Business Continuity**: RTO, RPO, backup strategies, testing
+
+**CRITICAL KNOWLEDGE:**
+- **Multi-region != Multi-zone** (different failure domains and costs)
+- **RPO (Recovery Point Objective)** = maximum acceptable data loss
+- **RTO (Recovery Time Objective)** = maximum acceptable downtime
+- **Active-Active vs Active-Passive** DR strategies (cost vs complexity)
+- **Azure SLA math**: 99.9% + 99.9% = 99.99% when properly configured
+- **Auto-scaling lag**: Plan for warm-up time and scale-out delays
+- **Availability Zones**: 3 zones per region, physically separate datacenters
+
+**YOUR ROLE:**
+Generate contextual questions about availability and recovery requirements.
+
+**CRITICAL RULES:**
+1. If user mentioned "critical" or "mission-critical", ask about multi-region deployment
+2. If user mentioned "cost-sensitive" or "dev/test", suggest single-region with backup
+3. If user mentioned "compliance" or "financial", ask about RPO/RTO requirements
+4. If user mentioned "unpredictable load" or "spiky traffic", ask about auto-scaling
+5. If user mentioned "global users", ask about Traffic Manager or Front Door
+6. Always explain SLA implications and cost trade-offs
+7. Reference Microsoft Well-Architected Framework (Reliability pillar)
+
+**RESILIENCY PATTERNS:**
+- Mission-critical → Multi-region + active-active + Availability Zones (99.99%)
+- Business-critical → Multi-zone + automated backup + Site Recovery (99.95%)
+- Standard → Single-zone + backup + manual recovery (99.9%)
+- Dev/Test → No HA, cost optimization, manual restore
+- Global apps → Traffic Manager + multi-region + geo-replication"""
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical resiliency fields.
@@ -120,12 +205,41 @@ class ResiliencyDomainAgent(BaseDomainAgent):
         graph: KnowledgeGraph
     ) -> List[DomainAgentQuestion]:
         """
-        Generate resiliency-related questions for missing fields.
+        Generate adaptive questions for resiliency using LLM + domain knowledge.
         
-        Questions adapt to:
-        - User's intent (new deployment vs DR-only)
-        - Workload criticality
-        - Regulatory constraints
+        This method now:
+        1. Searches Microsoft documentation for resiliency/HA/DR best practices
+        2. Uses LLM to generate contextual questions
+        3. Falls back to hardcoded templates if LLM fails
+        """
+        # Try LLM-powered generation first
+        try:
+            llm_questions = self.generate_contextual_questions_with_llm(
+                graph=graph,
+                missing_fields=missing_fields
+            )
+            
+            if llm_questions:
+                self.logger.info(
+                    f"Generated {len(llm_questions)} LLM-powered questions for resiliency"
+                )
+                return llm_questions
+        
+        except Exception as e:
+            self.logger.warning(f"LLM question generation failed: {e}, using templates")
+        
+        # Fallback to templates
+        return self._fallback_to_template_questions(graph, missing_fields)
+    
+    def _fallback_to_template_questions(
+        self,
+        graph: KnowledgeGraph,
+        missing_fields: List[str]
+    ) -> List[DomainAgentQuestion]:
+        """
+        Fallback to hardcoded template questions if LLM fails.
+        
+        This preserves the original hardcoded logic as a safety net.
         """
         questions = []
         resiliency = graph.resiliency_dr
@@ -237,9 +351,10 @@ class ResiliencyDomainAgent(BaseDomainAgent):
         # Question 4: HA Model (Active-Active vs Active-Passive)
         if "ha_model" in missing_fields:
             # Infer recommendation based on RTO if available
-            if resiliency.rto_minutes and resiliency.rto_minutes < 5:
+            rto = self._parse_time_value(resiliency.rto_minutes)
+            if rto and rto < 5:
                 recommendation = " (Based on your RTO < 5 min, **active-active is required**)"
-            elif resiliency.rto_minutes and resiliency.rto_minutes < 15:
+            elif rto and rto < 15:
                 recommendation = " (Based on your RTO, **active-passive with automated failover** is recommended)"
             else:
                 recommendation = ""
@@ -330,7 +445,8 @@ class ResiliencyDomainAgent(BaseDomainAgent):
             ))
         
         # Conflict 3: RPO=0 but async replication
-        if (resiliency.rpo_minutes == 0 and
+        rpo = self._parse_time_value(resiliency.rpo_minutes)
+        if (rpo is not None and rpo == 0 and
             data.primary_db_engine and "cosmos" not in data.primary_db_engine.lower()):
             conflicts.append(Conflict(
                 conflict_id="resiliency_data_002",
@@ -348,7 +464,8 @@ class ResiliencyDomainAgent(BaseDomainAgent):
             ))
         
         # Conflict 4: Fast RTO but manual failover
-        if (resiliency.rto_minutes and resiliency.rto_minutes < 15 and
+        rto = self._parse_time_value(resiliency.rto_minutes)
+        if (rto is not None and rto < 15 and
             resiliency.failover_method and "manual" in resiliency.failover_method.lower()):
             conflicts.append(Conflict(
                 conflict_id="resiliency_automation_001",

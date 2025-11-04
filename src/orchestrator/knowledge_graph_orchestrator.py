@@ -21,6 +21,7 @@ from src.models.knowledge_graph import (
     DataPersistence,
     ResiliencyDR,
     SecurityGovernance,
+    MonitoringObservability,
     ExistingEnvironment,
 )
 from src.agents.domain_agents import (
@@ -32,6 +33,7 @@ from src.agents.domain_agents import (
     NetworkingDomainAgent,
     DataDomainAgent,
 )
+from src.agents.domain_agents.monitoring_agent import MonitoringAgent
 from src.orchestrator.intent_extractor import IntentExtractor
 
 
@@ -58,6 +60,7 @@ class KnowledgeGraphOrchestrator:
             "resiliency_dr": ResiliencyDomainAgent(),
             "networking_connectivity": NetworkingDomainAgent(),
             "data_persistence": DataDomainAgent(),
+            "monitoring_observability": MonitoringAgent(),
         }
         
         # Domain execution order based on intent
@@ -68,6 +71,8 @@ class KnowledgeGraphOrchestrator:
                 "networking_connectivity",
                 "data_persistence",
                 "resiliency_dr",
+                "monitoring_observability",
+                "security_governance",
             ],
             Intent.EXTEND_EXISTING: [
                 "identity_access",
@@ -75,6 +80,8 @@ class KnowledgeGraphOrchestrator:
                 "data_persistence",
                 "networking_connectivity",
                 "resiliency_dr",
+                "monitoring_observability",
+                "security_governance",
             ],
             Intent.DR_ONLY: [
                 "resiliency_dr",
@@ -82,6 +89,8 @@ class KnowledgeGraphOrchestrator:
                 "networking_connectivity",
                 "identity_access",
                 "runtime_platform",
+                "monitoring_observability",
+                "security_governance",
             ],
             Intent.MIGRATION: [
                 "runtime_platform",
@@ -89,13 +98,17 @@ class KnowledgeGraphOrchestrator:
                 "identity_access",
                 "networking_connectivity",
                 "resiliency_dr",
+                "monitoring_observability",
+                "security_governance",
             ],
             Intent.OPTIMIZE_SECURITY: [
+                "security_governance",  # Security first for this intent!
                 "identity_access",
                 "networking_connectivity",
                 "data_persistence",
                 "runtime_platform",
                 "resiliency_dr",
+                "monitoring_observability",
             ],
             Intent.OPTIMIZE_COST: [
                 "runtime_platform",
@@ -103,6 +116,8 @@ class KnowledgeGraphOrchestrator:
                 "resiliency_dr",
                 "networking_connectivity",
                 "identity_access",
+                "monitoring_observability",
+                "security_governance",
             ],
         }
 

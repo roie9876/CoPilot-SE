@@ -453,6 +453,62 @@ class SecurityGovernance(BaseModel):
     )
 
 
+class MonitoringObservability(BaseModel):
+    """
+    Monitoring, observability, and operational insights requirements.
+    
+    Covers:
+    - Application monitoring (Application Insights, custom metrics)
+    - Infrastructure monitoring (Azure Monitor, VM Insights)
+    - Log aggregation (Log Analytics, diagnostic settings)
+    - Alerting and dashboards
+    - Distributed tracing (APM)
+    """
+    
+    # CRITICAL FIELDS
+    monitoring_strategy: Optional[str] = Field(
+        None,
+        description="Monitoring approach: full_observability | basic_monitoring | custom_only | none"
+    )
+    log_retention_days: Optional[int] = Field(
+        None,
+        description="How long to retain logs (30, 90, 180, 365 days)"
+    )
+    apm_required: Optional[bool] = Field(
+        None,
+        description="Need Application Performance Monitoring (distributed tracing, dependency mapping)?"
+    )
+    alert_integrations: Optional[str] = Field(
+        None,
+        description="Alert routing: teams | email | pagerduty | servicenow | webhook"
+    )
+    
+    # OPTIONAL FIELDS
+    custom_metrics: Optional[bool] = Field(
+        None,
+        description="Need custom business metrics beyond standard Azure metrics?"
+    )
+    centralized_logging: Optional[bool] = Field(
+        None,
+        description="Aggregate logs from multiple services into single Log Analytics workspace?"
+    )
+    dashboard_requirements: Optional[str] = Field(
+        None,
+        description="Dashboard needs: azure_portal | grafana | power_bi | custom"
+    )
+    compliance_logging: Optional[bool] = Field(
+        None,
+        description="Need audit logs for compliance (SOC 2, HIPAA, PCI-DSS)?"
+    )
+    
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level in this domain"
+    )
+
+
 class Conflict(BaseModel):
     """
     Represents a detected contradiction between domain requirements.
@@ -575,6 +631,10 @@ class KnowledgeGraph(BaseModel):
     security_governance: SecurityGovernance = Field(
         default_factory=SecurityGovernance,
         description="Security, compliance, governance requirements"
+    )
+    monitoring_observability: MonitoringObservability = Field(
+        default_factory=MonitoringObservability,
+        description="Monitoring, logging, observability, and alerting requirements"
     )
     
     # Overall status

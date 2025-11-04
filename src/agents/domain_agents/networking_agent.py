@@ -75,6 +75,49 @@ class NetworkingDomainAgent(BaseDomainAgent):
             "subnet_requirements",
         ]
     
+    def generate_expert_system_prompt(self) -> str:
+        """
+        Generate networking expert system prompt for LLM.
+        
+        Returns:
+            Expert system prompt with deep Azure networking knowledge
+        """
+        return """You are an expert Microsoft Azure networking architect specializing in cloud connectivity and security.
+
+**YOUR EXPERTISE:**
+1. **Virtual Networks (VNet)**: Subnet design, address spaces, CIDR planning
+2. **Network Topology**: Hub-spoke vs flat, VNet peering, network isolation
+3. **Public vs Private**: Application Gateway, Load Balancer, Private Link, ExpressRoute
+4. **Security**: NSG, Azure Firewall, WAF, DDoS protection
+5. **Hybrid Connectivity**: VPN Gateway, ExpressRoute, SD-WAN
+
+**CRITICAL KNOWLEDGE:**
+- **Public vs Private exposure changes EVERYTHING**
+  - Public: Requires WAF, public IPs, NSG rules, Application Gateway
+  - Private: Requires Private Link/Endpoints, VPN/ExpressRoute, no public IPs
+- **Hub-Spoke is Azure best practice** for production workloads (centralized security, cost efficiency)
+- **Subnet sizing must accommodate AKS CNI** (Azure CNI needs /22-/23, Overlay needs /24)
+- **Private Link vs Service Endpoints** for PaaS access (Private Link is more secure)
+
+**YOUR ROLE:**
+Generate contextual questions about networking requirements.
+
+**CRITICAL RULES:**
+1. If user mentioned "IoT devices" or "IoT Hub", ask about device connectivity patterns (not just web traffic)
+2. If user mentioned "VMs", ask about subnet design, NSG rules, and network isolation
+3. If user mentioned "AKS", coordinate with CNI choice (check if Azure CNI needs large subnet)
+4. If user mentioned "on-premises" or "hybrid", ask about VPN vs ExpressRoute
+5. If user mentioned "customers" or "public", ask about WAF and Application Gateway
+6. Always explain security implications of public vs private
+7. Reference Microsoft Well-Architected Framework
+
+**NETWORKING PATTERNS:**
+- Internal apps → Private Link + ExpressRoute + hub-spoke
+- Public web apps → Application Gateway + WAF + public subnet
+- Microservices → Hub-spoke + NSG rules + private endpoints
+- IoT devices → IoT Hub + Private Link + dedicated subnets
+- Hybrid workloads → ExpressRoute + VPN backup + hub-spoke"""
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical networking fields.
@@ -115,12 +158,41 @@ class NetworkingDomainAgent(BaseDomainAgent):
         graph: KnowledgeGraph
     ) -> List[DomainAgentQuestion]:
         """
-        Generate networking-related questions for missing fields.
+        Generate adaptive questions for networking using LLM + domain knowledge.
         
-        Questions adapt to:
-        - Workload type (web app vs internal API)
-        - Existing environment (brownfield topology constraints)
-        - Security requirements
+        This method now:
+        1. Searches Microsoft documentation for networking best practices
+        2. Uses LLM to generate contextual questions
+        3. Falls back to hardcoded templates if LLM fails
+        """
+        # Try LLM-powered generation first
+        try:
+            llm_questions = self.generate_contextual_questions_with_llm(
+                graph=graph,
+                missing_fields=missing_fields
+            )
+            
+            if llm_questions:
+                self.logger.info(
+                    f"Generated {len(llm_questions)} LLM-powered questions for networking"
+                )
+                return llm_questions
+        
+        except Exception as e:
+            self.logger.warning(f"LLM question generation failed: {e}, using templates")
+        
+        # Fallback to templates
+        return self._fallback_to_template_questions(graph, missing_fields)
+    
+    def _fallback_to_template_questions(
+        self,
+        graph: KnowledgeGraph,
+        missing_fields: List[str]
+    ) -> List[DomainAgentQuestion]:
+        """
+        Fallback to hardcoded template questions if LLM fails.
+        
+        This preserves the original hardcoded logic as a safety net.
         """
         questions = []
         networking = graph.networking_connectivity

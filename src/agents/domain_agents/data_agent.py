@@ -78,6 +78,85 @@ class DataDomainAgent(BaseDomainAgent):
             "backup_expectation",
         ]
     
+    def _parse_time_value(self, value) -> int:
+        """
+        Parse RTO/RPO time values that may be ranges or single integers.
+        
+        Examples:
+            "15" -> 15
+            "15_to_60" -> 15 (use lower bound for comparisons)
+            "0" -> 0
+        
+        Args:
+            value: String or int time value
+        
+        Returns:
+            Integer value (lower bound if range)
+        """
+        if value is None:
+            return None
+        
+        if isinstance(value, int):
+            return value
+        
+        value_str = str(value).strip()
+        
+        if "_to_" in value_str:
+            value_str = value_str.split("_to_")[0]
+        
+        if "-" in value_str and value_str[0] != "-":
+            value_str = value_str.split("-")[0]
+        
+        try:
+            return int(value_str)
+        except (ValueError, AttributeError):
+            self.logger.warning(f"⚠️ Could not parse time value: {value}, returning None")
+            return None
+    
+    def generate_expert_system_prompt(self) -> str:
+        """
+        Generate data/storage expert system prompt for LLM.
+        
+        Returns:
+            Expert system prompt with deep Azure data services knowledge
+        """
+        return """You are an expert Microsoft Azure data architect specializing in storage and database services.
+
+**YOUR EXPERTISE:**
+1. **Relational Databases**: Azure SQL, PostgreSQL, MySQL (ACID, transactions, joins)
+2. **NoSQL**: Cosmos DB (multi-model, global distribution, flexible schema)
+3. **Storage**: Blob Storage, File Storage, Data Lake Storage Gen2
+4. **Caching**: Redis Cache, Front Door caching, CDN
+5. **Data Migration**: Azure Database Migration Service, Data Box
+6. **Time-Series**: Azure Data Explorer, Time Series Insights
+
+**CRITICAL KNOWLEDGE:**
+- **Cross-region replication** has cost and latency implications
+- **Cosmos DB consistency levels** (Strong, Bounded Staleness, Session, Eventual)
+- **Database SKU** affects performance and cost significantly
+- **Backup strategy** (GRS vs LRS, retention periods, RPO/RTO)
+- **Data sovereignty** and compliance requirements (GDPR, HIPAA)
+- **Managed vs Self-hosted** (PaaS vs IaaS trade-offs)
+
+**YOUR ROLE:**
+Generate contextual questions about data and storage requirements.
+
+**CRITICAL RULES:**
+1. If user mentioned "IoT", ask about time-series data and hot/cold paths
+2. If user mentioned "global users", ask about multi-region replication
+3. If user mentioned "sensitive data" or "PII", ask about encryption and compliance
+4. If user mentioned "analytics", ask about Data Lake vs data warehouse
+5. If user mentioned "e-commerce", ask about caching and session state
+6. Always explain cost vs performance trade-offs
+7. Reference Microsoft Well-Architected Framework
+
+**DATA PATTERNS:**
+- IoT telemetry → Time Series Insights + Cosmos DB + hot/cold storage
+- E-commerce → Azure SQL + Redis Cache + Blob Storage (images)
+- Analytics → Data Lake Storage Gen2 + Synapse Analytics
+- File sharing → Azure Files + Azure File Sync
+- Global apps → Cosmos DB (multi-region write) + geo-replication"""
+    
     def get_missing_critical_fields(self, graph: KnowledgeGraph) -> List[str]:
         """
         Identify missing critical data persistence fields.
@@ -122,12 +201,41 @@ class DataDomainAgent(BaseDomainAgent):
         graph: KnowledgeGraph
     ) -> List[DomainAgentQuestion]:
         """
-        Generate data persistence questions for missing fields.
+        Generate adaptive questions for data persistence using LLM + domain knowledge.
         
-        Questions adapt to:
-        - Workload type (e-commerce vs analytics)
-        - Compliance requirements
-        - Multi-region needs
+        This method now:
+        1. Searches Microsoft documentation for data/storage best practices
+        2. Uses LLM to generate contextual questions
+        3. Falls back to hardcoded templates if LLM fails
+        """
+        # Try LLM-powered generation first
+        try:
+            llm_questions = self.generate_contextual_questions_with_llm(
+                graph=graph,
+                missing_fields=missing_fields
+            )
+            
+            if llm_questions:
+                self.logger.info(
+                    f"Generated {len(llm_questions)} LLM-powered questions for data"
+                )
+                return llm_questions
+        
+        except Exception as e:
+            self.logger.warning(f"LLM question generation failed: {e}, using templates")
+        
+        # Fallback to templates
+        return self._fallback_to_template_questions(graph, missing_fields)
+    
+    def _fallback_to_template_questions(
+        self,
+        graph: KnowledgeGraph,
+        missing_fields: List[str]
+    ) -> List[DomainAgentQuestion]:
+        """
+        Fallback to hardcoded template questions if LLM fails.
+        
+        This preserves the original hardcoded logic as a safety net.
         """
         questions = []
         data = graph.data_persistence
@@ -341,7 +449,8 @@ class DataDomainAgent(BaseDomainAgent):
             ))
         
         # Conflict 2: RPO=0 but async replication only
-        if (resiliency.rpo_minutes == 0 and
+        rpo = self._parse_time_value(resiliency.rpo_minutes)
+        if (rpo is not None and rpo == 0 and
             data.primary_db_engine and
             data.primary_db_engine.lower() not in ["cosmos", "cosmosdb"]):
             conflicts.append(Conflict(
