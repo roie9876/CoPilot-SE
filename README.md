@@ -14,11 +14,12 @@
 **"From customer intent → multi-cloud architecture design with costs and documentation — in <10 minutes."**
 
 Co-Pilot SE transforms the cloud architect workflow by automating:
-- **Requirements extraction** from natural language
+- **Adaptive requirements gathering** via Knowledge Graph Wizard with 6 domain agents
 - **Multi-cloud architecture design** (AWS/GCP/Azure/Oracle) with justifications
 - **Cost estimation** from public pricing sources (±30% accuracy)
 - **Professional HLD generation** with diagrams and citations
 
+**Current Status:** ✅ **Production Ready** - Full end-to-end workflow working (Nov 2025)  
 **POC Scope:** 10-user pilot, 8-10 weeks, online-only data (no RAG), simplified infrastructure (~$839/month)
 
 ---
@@ -34,12 +35,13 @@ Design architectures for **4 cloud platforms:**
 
 **Unified agent** designs for one cloud at a time (no hybrid/multi-cloud in POC).
 
-### 🔍 **Intelligent Requirements Extraction**
-Natural language input → structured requirements:
-- Functional & non-functional requirements
-- Cloud platform detection (explicit or inferred)
-- Constraints (budget, region, timeline)
-- Clarifying questions for ambiguity
+### 🔍 **Knowledge Graph Wizard (NEW)**
+Adaptive requirements gathering via interactive wizard:
+- **6 Domain Agents**: Identity, Runtime, Networking, Data, Resiliency, Security
+- **Smart Question Flow**: Prioritizes critical gaps, then low-confidence domains
+- **Conflict Detection**: Automatically identifies contradicting requirements
+- **Progress Tracking**: Real-time confidence scores per domain (80% threshold)
+- **Example Scenarios**: Pre-built templates for common architectures
 
 ### 🏗️ **Architecture Design with Justifications**
 Proposes cloud solutions with:

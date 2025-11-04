@@ -1,14 +1,18 @@
 # Co-Pilot SE - Quick Start Guide
 
-This guide will help you get the Co-Pilot SE web portal up and running in minutes.
+**Status:** ✅ Production Ready (November 2025)  
+**Time to First Architecture:** <5 minutes
+
+This guide will help you get the Co-Pilot SE Knowledge Graph Wizard up and running.
 
 ## Prerequisites
 
-- **Python 3.11+** - Backend runtime
-- **Node.js 18+** - Frontend runtime  
+- **Python 3.11+** - Backend runtime (Python 3.9 NOT supported)
+- **Node.js 22+** - Frontend runtime (v18 NOT supported)
+- **Homebrew** (macOS) - For Azure CLI  
 - **API Keys**:
-  - Azure OpenAI API key and endpoint
-  - Bing Search API key
+  - Azure AI Agent Service endpoint (GPT-5 chat)
+  - Bing Search API key (S1 tier)
 
 ## 🚀 Quick Start (5 minutes)
 
@@ -83,19 +87,41 @@ npm run dev
 - **API Server**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
-## 📖 Usage
+## 📖 Usage - Knowledge Graph Wizard
 
-1. **Enter Requirements**: Describe your cloud architecture needs
+### Step 1: Enter Initial Requirements
+1. Navigate to http://localhost:5173
+2. Enter your architecture description (or click an example scenario)
    - Example: "Design an Azure e-commerce platform for 50,000 users with PCI DSS compliance and $5,000/month budget"
+3. Click **"Start Wizard"**
 
-2. **Generate**: Click "Generate Architecture" button
+### Step 2: Answer Adaptive Questions
+The wizard will ask domain-specific questions across 6 areas:
+- 🔐 **Identity & Access**: Authentication, MFA, user types
+- 🖥️ **Runtime Platform**: Containers, VMs, serverless
+- 🌐 **Networking**: VPN, regions, exposure
+- 💾 **Data Persistence**: Databases, storage, backups
+- 🔄 **Resiliency & DR**: High availability, failover
+- 🔒 **Security & Governance**: Compliance, secrets management
 
-3. **View Results**: Explore tabs:
-   - **Architecture**: Diagram, services, design rationale
-   - **Cost Analysis**: Cost breakdown and optimization tips
-   - **Documentation**: Full HLD document (download as .md)
+**Progress Indicators:**
+- Green bar shows overall confidence (target: 80%)
+- Domain cards show per-domain confidence
+- Critical gaps and conflicts are highlighted
 
-4. **Download**: Save HLD document or copy to clipboard
+### Step 3: Generate Complete Solution
+When all domains reach 80% confidence:
+1. Click **"Generate Architecture"** button
+2. Wait ~2 minutes for all 3 stages:
+   - ⚙️ Architecture Design (~40s)
+   - 💰 Cost Estimation (~40s)
+   - 📝 Documentation (~40s)
+
+### Step 4: Review Results
+Three sections are displayed:
+- **Architecture**: Diagram + 8 services with rationale
+- **Cost Estimate**: Low/Medium/High scenarios with monthly costs
+- **Documentation**: Full HLD markdown (downloadable)
 
 ## 🎯 Example Requests
 

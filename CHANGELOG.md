@@ -7,10 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for Phase 1 (Week 1-2)
-- Azure infrastructure provisioning (simplified, no RAG)
-- Multi-cloud service mapping research
-- Trusted sources validation
+## [2.1.0] - 2025-11-04
+
+### Knowledge Graph Wizard - Production Ready
+
+#### Added
+- **Complete End-to-End Workflow**: Architecture → Cost → Documentation (fully integrated)
+- **Knowledge Graph Wizard**: Adaptive question flow with 6 domain agents
+- **Example Scenarios**: 4 pre-built examples (Azure, AWS, GCP, Oracle) on landing page
+- **Cost Estimation Display**: Three-tier cost scenarios (Low/Medium/High) with visual breakdown
+- **Documentation Generation**: Full HLD markdown document with download capability
+- **Domain-Specific Agents**: 
+  - Identity & Access Management
+  - Runtime Platform
+  - Networking & Connectivity
+  - Data Persistence
+  - Resiliency & DR
+  - Security & Governance
+
+#### Fixed
+- **Stale Conflict Resolution**: Conflicts now properly cleared when domain answers updated
+- **Domain Priority Logic**: Low-confidence domains now questioned before conflicts
+- **Type Conversion Bugs**: Fixed auth_users (string→int), budget (string→dict), existing_infrastructure (string→list)
+- **Field Reference Errors**: Fixed external_customers → auth_users field mapping
+- **Button Visibility**: Removed CSS conflicts causing white-on-white buttons
+- **Missing Field Detection**: Added get_all_missing_fields() for comprehensive low-confidence questioning
+
+#### Changed
+- **Default Interface**: Knowledge Graph Wizard is now the only interface (removed legacy multi-stage flow)
+- **Title**: "Knowledge Graph Architecture Wizard" → "Architecture Wizard"
+- **Orchestrator Flow**: Now runs all 3 stages sequentially (Architecture, Cost, Documentation)
+- **UI Layout**: Cleaner single-wizard interface with example scenarios
+
+#### Removed
+- Legacy "Multi-Stage Flow (OLD)" toggle and interface
+- Global CSS button overrides interfering with Tailwind styles
 
 ## [2.0.0] - 2025-10-31
 
