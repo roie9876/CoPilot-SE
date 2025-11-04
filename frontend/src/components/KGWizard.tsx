@@ -179,7 +179,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
         <div className="flex items-center space-x-3 mb-6">
           <Sparkles className="w-8 h-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-800">
-            Knowledge Graph Architecture Wizard
+            Architecture Wizard
           </h1>
         </div>
 
@@ -191,7 +191,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
         <div className="space-y-4">
           <div>
             <label htmlFor="requirements" className="block text-sm font-medium text-gray-700 mb-2">
-              Requirements Description
+              What cloud architecture do you need?
             </label>
             <textarea
               id="requirements"
@@ -199,9 +199,47 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
               onChange={(e) => setRequirements(e.target.value)}
               rows={6}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Example: Build an e-commerce platform on Azure for 10,000 users with high availability..."
+              placeholder="Example: Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget"
               disabled={isSubmitting}
             />
+            <p className="mt-2 text-sm text-gray-500">
+              Minimum 10 characters. Include cloud platform (Azure/AWS/GCP/Oracle), requirements, constraints, and budget.
+            </p>
+          </div>
+
+          {/* Example Scenarios */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-3">Or try an example:</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                onClick={() => setRequirements("Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget")}
+                className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
+                disabled={isSubmitting}
+              >
+                Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget
+              </button>
+              <button
+                onClick={() => setRequirements("Build a serverless API backend on AWS for a mobile app with user authentication and file storage")}
+                className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
+                disabled={isSubmitting}
+              >
+                Build a serverless API backend on AWS for a mobile app with user authentication and file storage
+              </button>
+              <button
+                onClick={() => setRequirements("Create a GCP microservices architecture with Kubernetes for a SaaS application")}
+                className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
+                disabled={isSubmitting}
+              >
+                Create a GCP microservices architecture with Kubernetes for a SaaS application
+              </button>
+              <button
+                onClick={() => setRequirements("Design an Oracle Cloud data warehouse solution for analytics with 10TB of data")}
+                className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
+                disabled={isSubmitting}
+              >
+                Design an Oracle Cloud data warehouse solution for analytics with 10TB of data
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -210,11 +248,11 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-end">
             {onBack && (
               <button
                 onClick={onBack}
-                className="px-6 py-3 text-gray-700 hover:text-gray-900 flex items-center space-x-2"
+                className="px-6 py-3 text-gray-700 hover:text-gray-900 flex items-center space-x-2 mr-auto"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span>Back</span>
@@ -223,7 +261,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
             <button
               onClick={handleStartSession}
               disabled={isSubmitting || !requirements.trim()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-sm"
             >
               {isSubmitting ? (
                 <>

@@ -268,42 +268,9 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Workflow Toggle */}
-        {!result && !loading && (
-          <div className="mb-6 flex justify-center">
-            <div className="inline-flex rounded-lg border border-gray-300 bg-white p-1">
-              <button
-                onClick={() => setUseKGWizard(true)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                  useKGWizard
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                🧠 Knowledge Graph Wizard (NEW)
-              </button>
-              <button
-                onClick={() => setUseKGWizard(false)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                  !useKGWizard
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📋 Multi-Stage Flow (OLD)
-              </button>
-            </div>
-          </div>
-        )}
-        
-        {/* Knowledge Graph Wizard (NEW) */}
-        {useKGWizard && (
+        {/* Knowledge Graph Wizard - Default Interface */}
+        {!result && !loading && !needsClarification && !inStageFlow && (
           <KGWizard />
-        )}
-        
-        {/* Requirements Form (OLD - hidden when using KG wizard) */}
-        {!useKGWizard && !result && !loading && !needsClarification && !inStageFlow && (
-          <RequirementsForm onSubmit={handleSubmit} loading={loading} />
         )}
 
         {/* Multi-Stage Flow */}
