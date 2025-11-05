@@ -37,6 +37,23 @@ export default function SavedDesigns({ onLoadDesign, onClose }: SavedDesignsProp
   };
 
   const handleLoad = (design: SavedDesign) => {
+    console.log('Loading design:', design);
+    console.log('Has costs:', !!design.costs);
+    console.log('Has documentation:', !!design.documentation);
+    
+    // Show warning if design is incomplete
+    const missingParts = [];
+    if (!design.costs) missingParts.push('Cost Analysis');
+    if (!design.documentation) missingParts.push('Documentation');
+    
+    if (missingParts.length > 0) {
+      alert(`⚠️ This design is missing: ${missingParts.join(', ')}\n\nThis design was saved before the complete workflow was added.\nPlease generate a new design through the wizard to get full cost and documentation.`);
+    }
+    
+    const stages = ['architecture'];
+    if (design.costs) stages.push('cost');
+    if (design.documentation) stages.push('documentation');
+    
     const result: OrchestratorOutput = {
       status: 'success',
       architecture: design.architecture,
@@ -44,9 +61,9 @@ export default function SavedDesigns({ onLoadDesign, onClose }: SavedDesignsProp
       documentation: design.documentation,
       citations: design.architecture.citations || [],
       workflow_metadata: {
-        stages_completed: ['architecture', 'cost', 'documentation'],
+        stages_completed: stages,
         total_duration_seconds: 0,
-        agents_invoked: ['architecture', 'cost', 'documentation'],
+        agents_invoked: stages,
         start_time: design.timestamp,
         end_time: design.timestamp
       },
@@ -112,14 +129,22 @@ export default function SavedDesigns({ onLoadDesign, onClose }: SavedDesignsProp
                         )}
                       </div>
                       <div className="flex items-center space-x-2 text-xs text-gray-400 mt-1">
-                        {design.costs && (
+                        {design.costs ? (
                           <span className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
                             Cost Analysis ✓
                           </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                            No Cost Data
+                          </span>
                         )}
-                        {design.documentation && (
+                        {design.documentation ? (
                           <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                             HLD Document ✓
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
+                            No Documentation
                           </span>
                         )}
                       </div>

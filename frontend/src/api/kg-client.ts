@@ -119,3 +119,28 @@ export async function kgArchitecture(sessionId: string): Promise<KGArchitectureR
     throw error;
   }
 }
+
+/**
+ * AI auto-fills answers for Knowledge Graph questions
+ */
+export async function kgAutofill(
+  sessionId: string,
+  domain: string,
+  questions: unknown[]
+): Promise<{ suggested_answers: Record<string, string> }> {
+  try {
+    const request = {
+      session_id: sessionId,
+      domain,
+      questions,
+    };
+    const response = await apiClient.post('/api/kg/autofill', request);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const apiError = error.response?.data as ApiError;
+      throw new Error(apiError?.error || error.message || 'Failed to auto-fill answers');
+    }
+    throw error;
+  }
+}

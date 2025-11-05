@@ -253,6 +253,12 @@ function App() {
   };
 
   const handleLoadDesign = (result: OrchestratorOutput) => {
+    console.log('📂 Loading design in App.tsx');
+    console.log('Result object:', result);
+    console.log('Has costs:', !!result.costs);
+    console.log('Has documentation:', !!result.documentation);
+    console.log('Costs object:', result.costs);
+    console.log('Documentation object:', result.documentation);
     setResult(result);
     setActiveTab('architecture');
   };

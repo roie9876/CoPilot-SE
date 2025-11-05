@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Send, AlertCircle, HelpCircle } from 'lucide-react';
+import { Send, AlertCircle, HelpCircle, Sparkles } from 'lucide-react';
 import type { KGQuestion } from '../types-kg';
 import { DOMAIN_NAMES } from '../types-kg';
+import { kgAutofill } from '../api/kg-client';
 
 interface AdaptiveQuestionFormProps {
   domain: string;
   questions: KGQuestion[];
   onSubmit: (answers: Record<string, string | number | boolean | string[]>) => void;
   isSubmitting: boolean;
+  sessionId: string;
 }
 
 const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
@@ -15,10 +17,12 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
   questions,
   onSubmit,
   isSubmitting,
+  sessionId,
 }) => {
   const [answers, setAnswers] = useState<Record<string, string | number | boolean | string[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showHelp, setShowHelp] = useState<Record<string, boolean>>({});
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
 
   // Reset form when domain changes
   useEffect(() => {
@@ -81,6 +85,27 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
     }
   };
 
+  const handleAutoFill = async () => {
+    setIsAutoFilling(true);
+    try {
+      const result = await kgAutofill(sessionId, domain, questions);
+      
+      // Populate form with AI suggestions
+      const newAnswers: Record<string, string | number | boolean | string[]> = {};
+      Object.entries(result.suggested_answers).forEach(([fieldName, value]) => {
+        newAnswers[fieldName] = value;
+      });
+      
+      setAnswers(newAnswers);
+      setErrors({}); // Clear any validation errors
+    } catch (error) {
+      console.error('Auto-fill failed:', error);
+      alert('Failed to auto-fill questions. Please try again or fill manually.');
+    } finally {
+      setIsAutoFilling(false);
+    }
+  };
+
   const toggleHelp = (fieldName: string) => {
     setShowHelp((prev) => ({ ...prev, [fieldName]: !prev[fieldName] }));
   };
@@ -95,10 +120,11 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
           id={question.field_name}
           value={String(value)}
           onChange={(e) => handleInputChange(question.field_name, e.target.value)}
-          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer ${
             errors[question.field_name] ? 'border-red-500' : 'border-gray-300'
           }`}
-          disabled={isSubmitting}
+          style={{ position: 'relative', zIndex: 10 }}
+          disabled={isSubmitting || isAutoFilling}
         >
           <option value="">-- Select an option --</option>
           {question.options.map((opt) => (
@@ -196,9 +222,29 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          {domainDisplayName} Questions
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {domainDisplayName} Questions
+          </h2>
+          <button
+            type="button"
+            onClick={handleAutoFill}
+            disabled={isAutoFilling || isSubmitting}
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+          >
+            {isAutoFilling ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>AI is thinking...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Auto-Fill with AI</span>
+              </>
+            )}
+          </button>
+        </div>
         <p className="text-gray-600">
           Please answer the following questions to help us design your architecture.
         </p>

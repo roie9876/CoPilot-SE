@@ -7,10 +7,10 @@ interface RequirementsFormProps {
 }
 
 const EXAMPLE_PROMPTS = [
-  "Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget",
-  "Build a serverless API backend on Azure for a mobile app with user authentication and file storage",
-  "Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users",
-  "Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance",
+  "Design a highly available Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance, Azure AD B2C authentication, CDN for global traffic, geo-replicated SQL databases, Azure Key Vault for secrets, 99.99% SLA, and Application Insights monitoring. Budget: $5,000/month",
+  "Build a secure multi-tenant SaaS application on Azure with AKS microservices, Azure Private Link networking, Azure SQL with private endpoints, managed identity authentication, auto-scaling (10-100 pods), backup to geo-redundant storage, Azure Monitor alerts, and zero-downtime deployments. Expected: 10,000 users",
+  "Create an Azure serverless IoT solution with Event Hubs for 1M device messages/day, Azure Functions for real-time processing, Time Series Insights for analytics, Cosmos DB with multi-region writes, DDoS protection, API Management with OAuth2, automatic failover, and Log Analytics dashboards",
+  "Design a HIPAA-compliant healthcare data platform on Azure with Azure Synapse Analytics, Data Lake Storage with encryption at rest, VNet service endpoints, Azure Firewall, role-based access control, automated backups with 7-year retention, compliance reports, and real-time alerting for security events",
 ];
 
 export default function RequirementsForm({ onSubmit, loading }: RequirementsFormProps) {
@@ -46,7 +46,7 @@ export default function RequirementsForm({ onSubmit, loading }: RequirementsForm
             rows={5}
             value={requirements}
             onChange={(e) => setRequirements(e.target.value)}
-            placeholder="Example: Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget"
+            placeholder="Example: Design an Azure solution with specific requirements for identity (authentication), runtime (compute), networking (connectivity), data (storage), security (compliance), resiliency (availability), and monitoring (observability)..."
             className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             required
             minLength={10}

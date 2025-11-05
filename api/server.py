@@ -670,6 +670,158 @@ async def kg_answer(request: KGAnswerRequest):
         raise HTTPException(status_code=500, detail=f"KG answer failed: {str(e)}")
 
 
+@app.post("/api/kg/autofill", tags=["Knowledge Graph"])
+async def kg_autofill(request: dict):
+    """
+    AI auto-fills answers for Knowledge Graph questions.
+    
+    Analyzes the domain, questions, and context to suggest best default answers.
+    """
+    logger.info(f"📥 Received autofill request: {request.keys()}")
+    try:
+        session_id = request.get("session_id")
+        domain = request.get("domain")
+        questions = request.get("questions", [])
+        logger.info(f"📋 Session: {session_id}, Domain: {domain}, Questions: {len(questions)}")
+        
+        if not session_id or not domain or not questions:
+            raise HTTPException(status_code=400, detail="Missing required fields")
+        
+        if session_id not in sessions:
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        
+        session_data = sessions[session_id]
+        kg = session_data.get("kg")
+        
+        if not kg:
+            raise HTTPException(status_code=400, detail="No Knowledge Graph in session")
+        
+        logger.info(f"🤖 Auto-filling {len(questions)} questions for domain: {domain}")
+        
+        # Import required modules
+        import json
+        import re
+        import asyncio
+        
+        # ✅ Use Agent Framework (same as domain agents)
+        try:
+            from src.services.agent_framework_client import AgentFrameworkClient
+            agent_framework = AgentFrameworkClient()
+            logger.info("✅ Agent Framework client initialized")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Agent Framework client: {e}")
+            raise HTTPException(status_code=500, detail=f"Agent Framework error: {str(e)}")
+        
+        # Build context from existing KG data
+        try:
+            context_info = {
+                "intent": kg.context.intent.value if hasattr(kg.context, 'intent') and kg.context.intent else "new_deployment",
+                "workload_type": kg.context.workload_type.value if hasattr(kg.context, 'workload_type') and kg.context.workload_type else "web_app",
+                "cloud_provider": kg.context.cloud_provider.value if hasattr(kg.context, 'cloud_provider') and kg.context.cloud_provider else "azure",
+            }
+            logger.info(f"📊 Context extracted: {context_info}")
+        except Exception as e:
+            logger.error(f"❌ Failed to extract context: {e}")
+            raise HTTPException(status_code=500, detail=f"Context extraction error: {str(e)}")
+        
+        # Build prompt for AI
+        prompt = f"""You are an expert Azure cloud architect helping to design an architecture.
+
+Context:
+- Intent: {context_info['intent']}
+- Workload Type: {context_info['workload_type']}
+- Cloud Provider: {context_info['cloud_provider']}
+
+Domain: {domain}
+
+I will provide you with questions that have multiple-choice options. For each question, analyze the context and select the MOST APPROPRIATE option that best fits an {context_info['workload_type']} workload.
+
+Questions:
+"""
+        
+        for i, q in enumerate(questions, 1):
+            field_name = q.get('field_name', '')
+            prompt += f"\n{i}. Field: **{field_name}**\n"
+            prompt += f"   Question: {q.get('question_text', '')}\n"
+            if q.get('options'):
+                prompt += "   Options:\n"
+                for opt in q['options']:
+                    prompt += f"   - {opt}\n"
+            if q.get('context'):
+                prompt += f"   Context: {q['context']}\n"
+        
+        prompt += """\n\nProvide your answer as a JSON object. Use the EXACT field_name as the key and select ONE option from the provided options list as the value.
+
+CRITICAL: Use the exact field names shown above (e.g., "auth_users", "existing_tenant", "mfa_policy").
+CRITICAL: Select ONLY from the options listed for each question.
+
+Example format:
+{
+  "auth_users": "internal_employees",
+  "existing_tenant": "reuse_existing_tenant",
+  "mfa_policy": "mfa_for_all_users",
+  "federation_or_b2b": "no_external_federation"
+}
+
+JSON response:"""
+        
+        # ✅ CORRECT: Use Microsoft Agent Framework (same pattern as domain agents)
+        logger.info("🤖 Creating AutoFill Agent via Agent Framework...")
+        
+        # Create agent with Bing disabled (we just need GPT for answer selection)
+        agent = agent_framework.create_agent(
+            name="AutoFillAgent",
+            instructions="You are an expert Azure cloud architect. Respond only with valid JSON format for question answers.",
+            enable_bing=False,  # No web search needed for selecting from given options
+            model="gpt-4o"
+        )
+        
+        logger.info(f"✅ Agent created: {agent.name}")
+        
+        # Execute agent with the prompt (Agent Framework uses async)
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If already in async context, create a task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                result = executor.submit(asyncio.run, agent.run(prompt)).result()
+        else:
+            result = asyncio.run(agent.run(prompt))
+        
+        # Extract response text
+        if not result or not result.messages:
+            raise ValueError("Agent returned empty response")
+        
+        ai_response = result.messages[-1].text.strip()
+        logger.info(f"🤖 AI response: {ai_response}")
+        
+        # Parse JSON response
+        
+        # Extract JSON from response (handle markdown code blocks)
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', ai_response, re.DOTALL)
+        if json_match:
+            ai_response = json_match.group(1)
+        
+        suggested_answers = json.loads(ai_response)
+        
+        logger.info(f"✅ Auto-fill generated {len(suggested_answers)} suggestions")
+        
+        return {
+            "session_id": session_id,
+            "domain": domain,
+            "suggested_answers": suggested_answers
+        }
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Failed to parse AI response: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse AI suggestions")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Auto-fill failed: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Auto-fill failed: {str(e)}")
+
+
 @app.get("/api/kg/status/{session_id}", tags=["Knowledge Graph"])
 async def kg_status(session_id: str):
     """

@@ -126,6 +126,72 @@ Co-Pilot SE is an AI-powered assistant that helps Solution Engineers design Azur
 
 ---
 
+## ⚠️ CRITICAL: Microsoft Agent Framework Requirements
+
+**ALWAYS use Microsoft Agent Framework for ALL AI/LLM interactions. NEVER use direct OpenAI SDK calls.**
+
+### Required Pattern for ALL Agent Interactions
+
+```python
+from src.services.agent_framework_client import AgentFrameworkClient
+import asyncio
+
+# ✅ CORRECT - Use Agent Framework (Microsoft agent_framework SDK)
+agent_framework = AgentFrameworkClient()
+
+# Create agent
+agent = agent_framework.create_agent(
+    name="MyAgent",
+    instructions="You are an Azure cloud architect...",
+    enable_bing=True,  # Optional: Enable Bing Grounding for web search
+    model="gpt-4o"     # Optional: Override default model
+)
+
+# Execute agent (Agent Framework uses async)
+result = asyncio.run(agent.run("Your prompt here"))
+
+# Access response
+response_text = result.messages[-1].text
+# If Bing was enabled, citations are in result.citations
+
+# ❌ WRONG - Direct OpenAI SDK
+from openai import AzureOpenAI
+client = AzureOpenAI(...)  # DO NOT USE THIS
+
+# ❌ WRONG - Direct azure.ai.projects (deprecated in favor of agent_framework)
+from azure.ai.projects import AIProjectClient  # DO NOT USE THIS
+```
+
+### Why Agent Framework is Mandatory
+
+1. **Consistent Architecture**: All 11 agents use Agent Framework
+2. **Built-in Tracing**: Automatic Application Insights integration
+3. **Token Management**: Built-in rate limiting and retry logic
+4. **Security**: Managed identity and Key Vault integration
+5. **Compliance**: Meets Microsoft's AI governance requirements
+
+### When Writing New Code
+
+- ✅ Import from `agent_framework` (Microsoft Agent Framework SDK)
+- ✅ Use `AgentFrameworkClient` for all LLM calls
+- ✅ Create `ChatAgent` instances via `agent_framework.create_agent()`
+- ✅ Use async/await patterns (`asyncio.run(agent.run())`)
+- ✅ Use `HostedWebSearchTool` for Bing Grounding (not direct Bing API)
+- ❌ NEVER import `openai` package directly
+- ❌ NEVER use `OpenAI()` or `AzureOpenAI()` constructors
+- ❌ NEVER bypass the Agent Framework
+- ❌ NEVER use deprecated `azure.ai.projects` SDK directly
+
+### Environment Variables Required
+
+```bash
+AZURE_AI_PROJECT_CONNECTION_STRING=<your-connection-string>
+AZURE_OPENAI_ENDPOINT=<your-endpoint>  # Used by Agent Framework
+AZURE_OPENAI_API_KEY=<your-key>        # Used by Agent Framework
+```
+
+---
+
 ## 📝 Coding Standards
 
 ### Python (Backend & Agents)
@@ -294,12 +360,13 @@ AZURE_OPENAI_API_KEY=your-key-here
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-5
 AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
-# Bing Search API (REQUIRED)
-BING_SEARCH_ENDPOINT=https://api.bing.microsoft.com/v7.0/search
-BING_SEARCH_API_KEY=your-bing-key
-BING_SEARCH_TIER=S1
+# Bing Grounding (REQUIRED for web search via Agent Framework)
+BING_CONNECTION_ID=your-bing-connection-id  # From Azure AI Foundry portal
 
-# YouTube Data API (OPTIONAL)
+# NOTE: Bing is accessed through Azure AI Foundry Agent Service, NOT directly.
+# Use HostedWebSearchTool in Agent Framework, not Bing Search API.
+
+# YouTube Data API (OPTIONAL - for video transcript retrieval)
 YOUTUBE_API_KEY=your-youtube-key
 
 # Azure AD (REQUIRED for auth)
@@ -332,9 +399,9 @@ CoPilot-SE/
 │   │   ├── __init__.py
 │   │   └── master_orchestrator.py
 │   ├── services/                  # External services
-│   │   ├── bing_search.py
+│   │   ├── agent_framework_client.py  # Microsoft Agent Framework wrapper
 │   │   ├── youtube_api.py
-│   │   └── openai_client.py
+│   │   └── openai_client.py      # Legacy (being phased out)
 │   └── utils/                     # Shared utilities
 │       ├── validators.py
 │       └── formatters.py

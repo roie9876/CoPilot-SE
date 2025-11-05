@@ -11,10 +11,10 @@ import type {
   KGArchitectureResponse,
   Conflict,
   ServiceCost,
-  CostOutput,
-  DocumentationOutput,
+  CostOutput as KGCostOutput,
+  DocumentationOutput as KGDocumentationOutput,
 } from '../types-kg';
-import type { ArchitectureOutput } from '../types';
+import type { ArchitectureOutput, CostOutput, DocumentationOutput } from '../types';
 import { kgStart, kgAnswer, kgArchitecture, kgValidate } from '../api/kg-client';
 
 type WizardState =
@@ -60,8 +60,8 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
 
   // Architecture result
   const [architecture, setArchitecture] = useState<ArchitectureOutput | null>(null);
-  const [costEstimate, setCostEstimate] = useState<CostOutput | null>(null);
-  const [documentation, setDocumentation] = useState<DocumentationOutput | null>(null);
+  const [costEstimate, setCostEstimate] = useState<KGCostOutput | null>(null);
+  const [documentation, setDocumentation] = useState<KGDocumentationOutput | null>(null);
 
   // Submitting state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -181,6 +181,62 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
     }
   };
 
+  // Map KG API types to App types for ArchitectureView
+  const mapKGCostToAppCost = (kgCost: KGCostOutput, arch: ArchitectureOutput): CostOutput => {
+    return {
+      target_cloud: arch.target_cloud,
+      region: arch.region,
+      currency: kgCost.currency,
+      time_period: kgCost.time_period,
+      service_costs: kgCost.service_costs.map(sc => ({
+        ...sc,
+        category: sc.category || 'Other',
+        pricing_model: sc.pricing_model || 'Pay-as-you-go',
+        pricing_tier: sc.pricing_tier || 'Standard',
+        pricing_url: sc.pricing_url || '',
+        assumptions: {},
+        cost_breakdown: {},
+      })),
+      total_monthly_cost_low: kgCost.total_monthly_cost_low,
+      total_monthly_cost_medium: kgCost.total_monthly_cost_medium,
+      total_monthly_cost_high: kgCost.total_monthly_cost_high,
+      cost_by_category: {},
+      cost_optimization_recommendations: [],
+      assumptions: kgCost.assumptions || [],
+      disclaimers: ['Cost estimates are approximate and may vary based on actual usage.'],
+      confidence_level: 'medium',
+      sources: kgCost.citations?.map(c => ({
+        title: c || 'Azure Pricing',
+        url: '',
+        relevance: 'pricing',
+        accessed_at: new Date().toISOString(),
+      })) || [],
+      citations: kgCost.citations?.map(c => ({
+        title: c || 'Azure Pricing',
+        url: '',
+        relevance: 'pricing',
+        accessed_at: new Date().toISOString(),
+      })) || [],
+    };
+  };
+
+  const mapKGDocToAppDoc = (kgDoc: KGDocumentationOutput): DocumentationOutput => {
+    return {
+      format: kgDoc.format,
+      content: kgDoc.content,
+      diagrams: [],
+      metadata: {
+        title: 'Architecture Documentation',
+        generated_at: new Date().toISOString(),
+        cloud_platform: 'Azure',
+        version: '1.0',
+        filename: 'architecture.md',
+        author: 'Co-Pilot SE',
+      },
+      export_formats: ['markdown', 'pdf'],
+    };
+  };
+
   // Reset wizard
   const handleReset = () => {
     setState('initial');
@@ -233,7 +289,7 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
               onChange={(e) => setRequirements(e.target.value)}
               rows={6}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Example: Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget"
+              placeholder="Example: Design an Azure solution with specific requirements for identity (authentication), runtime (compute), networking (connectivity), data (storage), security (compliance), resiliency (availability), and monitoring (observability)..."
               disabled={isSubmitting}
             />
             <p className="mt-2 text-sm text-gray-500">
@@ -246,32 +302,36 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
             <p className="text-sm font-medium text-gray-700 mb-3">Or try an example:</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
-                onClick={() => setRequirements("Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget")}
+                onClick={() => setRequirements("Design a highly available Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance, Azure AD B2C authentication, CDN for global traffic, geo-replicated SQL databases, Azure Key Vault for secrets, 99.99% SLA, and Application Insights monitoring. Budget: $5,000/month")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Design an Azure e-commerce platform for 50,000 concurrent users with PCI DSS compliance and $5,000/month budget
+                <span className="font-semibold block mb-1">🛒 E-Commerce Platform (High Availability)</span>
+                <span className="text-xs text-gray-600">Covers: Identity (Azure AD B2C), Networking (CDN), Data (geo-replication), Security (Key Vault, PCI DSS), Resiliency (99.99% SLA), Monitoring (App Insights)</span>
               </button>
               <button
-                onClick={() => setRequirements("Build a serverless API backend on Azure for a mobile app with user authentication and file storage")}
+                onClick={() => setRequirements("Build a secure multi-tenant SaaS application on Azure with AKS microservices, Azure Private Link networking, Azure SQL with private endpoints, managed identity authentication, auto-scaling (10-100 pods), backup to geo-redundant storage, Azure Monitor alerts, and zero-downtime deployments. Expected: 10,000 users")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Build a serverless API backend on Azure for a mobile app with user authentication and file storage
+                <span className="font-semibold block mb-1">🏢 Multi-Tenant SaaS (AKS Microservices)</span>
+                <span className="text-xs text-gray-600">Covers: Identity (managed identity), Runtime (AKS, auto-scaling), Networking (Private Link), Data (Azure SQL, backups), Security (private endpoints), Resiliency (zero-downtime), Monitoring (Azure Monitor)</span>
               </button>
               <button
-                onClick={() => setRequirements("Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users")}
+                onClick={() => setRequirements("Create an Azure serverless IoT solution with Event Hubs for 1M device messages/day, Azure Functions for real-time processing, Time Series Insights for analytics, Cosmos DB with multi-region writes, DDoS protection, API Management with OAuth2, automatic failover, and Log Analytics dashboards")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Create an Azure microservices architecture with AKS for a SaaS application with 10,000 users
+                <span className="font-semibold block mb-1">📡 IoT Platform (Serverless & Real-Time)</span>
+                <span className="text-xs text-gray-600">Covers: Identity (OAuth2), Runtime (Functions, Event Hubs), Networking (API Management), Data (Cosmos DB, multi-region), Security (DDoS protection), Resiliency (auto failover), Monitoring (Log Analytics)</span>
               </button>
               <button
-                onClick={() => setRequirements("Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance")}
+                onClick={() => setRequirements("Design a HIPAA-compliant healthcare data platform on Azure with Azure Synapse Analytics, Data Lake Storage with encryption at rest, VNet service endpoints, Azure Firewall, role-based access control, automated backups with 7-year retention, compliance reports, and real-time alerting for security events")}
                 className="text-left p-3 border border-blue-200 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition text-sm text-blue-600"
                 disabled={isSubmitting}
               >
-                Design an Azure data analytics solution with Azure Synapse for a healthcare application with HIPAA compliance
+                <span className="font-semibold block mb-1">🏥 Healthcare Data Platform (HIPAA Compliance)</span>
+                <span className="text-xs text-gray-600">Covers: Identity (RBAC), Runtime (Synapse Analytics), Networking (VNet, Firewall), Data (Data Lake, encryption, 7-year backups), Security (HIPAA, compliance reports), Monitoring (real-time security alerts)</span>
               </button>
             </div>
           </div>
@@ -359,12 +419,13 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       />
 
       {/* Questions Form */}
-      {questions.length > 0 && currentDomain && (
+      {questions.length > 0 && currentDomain && sessionId && (
         <AdaptiveQuestionForm
           domain={currentDomain}
           questions={questions}
           onSubmit={handleSubmitAnswers}
           isSubmitting={isSubmitting}
+          sessionId={sessionId}
         />
       )}
 
@@ -465,7 +526,13 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
         </div>
       </div>
 
-      {architecture && <ArchitectureView architecture={architecture} />}
+      {architecture && (
+        <ArchitectureView 
+          architecture={architecture} 
+          costs={costEstimate ? mapKGCostToAppCost(costEstimate, architecture) : undefined}
+          documentation={documentation ? mapKGDocToAppDoc(documentation) : undefined}
+        />
+      )}
 
       {/* Cost Estimate Section */}
       {costEstimate && (

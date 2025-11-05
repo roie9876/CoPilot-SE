@@ -20,6 +20,20 @@ mermaid.initialize({
 export default function ArchitectureView({ architecture, costs, documentation }: ArchitectureViewProps) {
   const diagramRef = useRef<HTMLDivElement>(null);
 
+  // Debug: Log received props
+  useEffect(() => {
+    console.log('🔍 ArchitectureView received props:');
+    console.log('Architecture exists:', !!architecture);
+    console.log('Costs exists:', !!costs);
+    console.log('Documentation exists:', !!documentation);
+    if (costs) {
+      console.log('Costs total (medium):', costs.total_monthly_cost_medium);
+    }
+    if (documentation) {
+      console.log('Documentation content length:', documentation.content.length);
+    }
+  }, [architecture, costs, documentation]);
+
   useEffect(() => {
     const renderDiagram = async () => {
       if (diagramRef.current && architecture.architecture_diagram) {
@@ -105,18 +119,47 @@ export default function ArchitectureView({ architecture, costs, documentation }:
   }, [architecture.architecture_diagram]);
 
   const handleSaveDesign = () => {
+    console.log('💾 Saving design...');
+    console.log('Architecture exists:', !!architecture);
+    console.log('Costs exists:', !!costs);
+    console.log('Costs value:', costs);
+    console.log('Documentation exists:', !!documentation);
+    console.log('Documentation value:', documentation);
+    
     const savedDesigns = JSON.parse(localStorage.getItem('copilot-se-designs') || '[]');
     const newDesign = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
       architecture,
-      costs,
-      documentation,
+      costs: costs || undefined,  // Ensure it's undefined if falsy
+      documentation: documentation || undefined,  // Ensure it's undefined if falsy
       name: `Design - ${new Date().toLocaleString()}`
     };
+    
+    console.log('📦 New design object:', {
+      id: newDesign.id,
+      hasCosts: !!newDesign.costs,
+      hasDocumentation: !!newDesign.documentation,
+      costsKeys: newDesign.costs ? Object.keys(newDesign.costs) : [],
+      docsKeys: newDesign.documentation ? Object.keys(newDesign.documentation) : []
+    });
+    
     savedDesigns.push(newDesign);
     localStorage.setItem('copilot-se-designs', JSON.stringify(savedDesigns));
-    alert('Design saved successfully with cost and documentation!');
+    
+    // Better check: ensure costs and documentation have actual data
+    const hasCostData = costs && typeof costs === 'object' && Object.keys(costs).length > 0;
+    const hasDocData = documentation && typeof documentation === 'object' && Object.keys(documentation).length > 0;
+    
+    const message = hasCostData && hasDocData
+      ? '✅ Design saved successfully with cost and documentation!'
+      : hasCostData
+      ? '✅ Design saved with cost analysis (documentation not available)'
+      : hasDocData
+      ? '✅ Design saved with documentation (cost not available)'
+      : '⚠️ Design saved (cost and documentation not yet generated)';
+    
+    alert(message);
   };
 
   const handleExportJSON = () => {
