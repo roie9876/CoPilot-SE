@@ -32,6 +32,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.orchestrator.master_orchestrator import MasterOrchestrator
 from src.models.schemas import OrchestratorOutput
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -41,14 +43,19 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend
+import os
+
+# Get allowed origins from environment variable or use defaults
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else [
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:3000",  # Alternative dev port
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative dev port
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -977,21 +984,68 @@ async def root():
     }
 
 
+# ============================================================================
+# Static File Serving (for Azure App Service single deployment)
+# ============================================================================
+
+# Serve built frontend if static directory exists
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    logger.info(f"📁 Serving static files from: {static_dir}")
+    
+    # Mount static assets (CSS, JS, images)
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    
+    @app.get("/", response_class=FileResponse)
+    async def serve_root():
+        """Serve the React app root"""
+        return FileResponse(str(static_dir / "index.html"))
+    
+    @app.get("/{full_path:path}", response_class=FileResponse)
+    async def serve_spa(full_path: str):
+        """
+        Serve the React SPA for all non-API routes (client-side routing)
+        API routes are handled above, this catches everything else
+        """
+        # Don't intercept API routes
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Check if requested file exists in static directory
+        file_path = static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        
+        # Default to index.html for client-side routing
+        return FileResponse(str(static_dir / "index.html"))
+else:
+    logger.info("📡 Running in API-only mode (no static files found)")
+
+
 def main():
-    """Run the API server"""
+    """Start the API server"""
+    import os
+    
+    # Get port from environment (Azure sets PORT variable)
+    port = int(os.getenv("PORT", 8000))
+    
+    # Determine if running in production (Azure App Service)
+    is_production = os.getenv("WEBSITE_SITE_NAME") is not None
+    
     print("=" * 60)
-    print("🚀 Co-Pilot SE API Server")
+    print("Co-Pilot SE API Server")
     print("=" * 60)
-    print("Starting server on http://localhost:8000")
-    print("API Documentation: http://localhost:8000/docs")
-    print("Frontend CORS: localhost:5173, localhost:3000")
+    print(f"Environment: {'Production (Azure)' if is_production else 'Development'}")
+    print(f"Starting server on http://0.0.0.0:{port}")
+    print(f"API Documentation: http://0.0.0.0:{port}/docs")
+    print(f"Allowed Origins: {os.getenv('ALLOWED_ORIGINS', 'localhost:5173, localhost:3000')}")
     print("=" * 60)
 
     uvicorn.run(
         "server:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=not is_production,  # Disable reload in production
         log_level="info",
     )
 

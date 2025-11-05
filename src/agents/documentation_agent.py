@@ -674,26 +674,7 @@ az group create --name "rg-app-prod" --location "eastus"
 ```
 
 """
-        elif input_data.requirements.target_cloud == "aws":
-            section += """```bash
-# Configure AWS CLI
-aws configure
-
-# Set default region
-export AWS_DEFAULT_REGION=us-east-1
-```
-
-"""
-        elif input_data.requirements.target_cloud == "gcp":
-            section += """```bash
-# Login to GCP
-gcloud auth login
-
-# Set project
-gcloud config set project <project-id>
-```
-
-"""
+        # POC is Azure-only, no AWS/GCP support
         
         section += """#### 2. Infrastructure Deployment
 

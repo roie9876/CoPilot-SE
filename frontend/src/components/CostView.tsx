@@ -78,6 +78,7 @@ export default function CostView({ costs }: CostViewProps) {
               <tr className="border-b dark:border-gray-700">
                 <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Service</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Pricing Model</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">SKU/Tier</th>
                 <th className="text-right py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">LOW</th>
                 <th className="text-right py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">MEDIUM</th>
                 <th className="text-right py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">HIGH</th>
@@ -97,6 +98,11 @@ export default function CostView({ costs }: CostViewProps) {
                       {service.pricing_model}
                     </span>
                   </td>
+                  <td className="py-3 px-4">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {service.pricing_tier || 'Standard'}
+                    </span>
+                  </td>
                   <td className="py-3 px-4 text-right text-green-600 dark:text-green-400 font-medium">
                     ${service.low_usage_monthly.toFixed(2)}
                   </td>
@@ -111,7 +117,7 @@ export default function CostView({ costs }: CostViewProps) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 dark:border-gray-600 font-bold">
-                <td colSpan={2} className="py-3 px-4 text-gray-900 dark:text-white">TOTAL</td>
+                <td colSpan={3} className="py-3 px-4 text-gray-900 dark:text-white">TOTAL</td>
                 <td className="py-3 px-4 text-right text-green-600 dark:text-green-400">
                   ${costs.total_monthly_cost_low.toFixed(2)}
                 </td>

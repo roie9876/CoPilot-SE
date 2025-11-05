@@ -20,6 +20,7 @@ aiohttp==3.9.1
 # Web framework
 fastapi==0.108.0
 uvicorn==0.38.0
+gunicorn==21.2.0
 
 # Google APIs (YouTube transcripts)
 google-api-python-client==2.108.0

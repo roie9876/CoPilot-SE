@@ -300,6 +300,15 @@ class NonFunctionalRequirements(BaseModel):
     availability: Dict = Field(default_factory=dict)
     security: Dict = Field(default_factory=dict)
     compliance: List[str] = Field(default_factory=list)
+    
+    @validator('compliance', pre=True)
+    def convert_compliance_to_list(cls, v):
+        """Auto-convert string to list for compliance field."""
+        if isinstance(v, str):
+            return [v] if v else []
+        elif isinstance(v, list):
+            return v
+        return []
 
 
 class TechnicalConstraints(BaseModel):

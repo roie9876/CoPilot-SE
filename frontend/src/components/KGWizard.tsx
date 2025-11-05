@@ -188,15 +188,29 @@ const KGWizard: React.FC<KGWizardProps> = ({ initialRequirements, onBack }) => {
       region: arch.region,
       currency: kgCost.currency,
       time_period: kgCost.time_period,
-      service_costs: kgCost.service_costs.map(sc => ({
-        ...sc,
-        category: sc.category || 'Other',
-        pricing_model: sc.pricing_model || 'Pay-as-you-go',
-        pricing_tier: sc.pricing_tier || 'Standard',
-        pricing_url: sc.pricing_url || '',
-        assumptions: {},
-        cost_breakdown: {},
-      })),
+      service_costs: kgCost.service_costs.map(sc => {
+        // Find matching architecture service to get detailed SKU/instance type
+        const archService = arch.services.find(
+          s => s.service_name.toLowerCase().includes(sc.service_name.toLowerCase()) ||
+               sc.service_name.toLowerCase().includes(s.service_name.toLowerCase())
+        );
+        
+        // Get detailed SKU from architecture configuration (e.g., "Dv5_3", "Business Critical")
+        const detailedSKU = archService?.configuration?.instance_type || 
+                          archService?.configuration?.sku ||
+                          sc.pricing_tier || 
+                          'Standard';
+        
+        return {
+          ...sc,
+          category: sc.category || 'Other',
+          pricing_model: sc.pricing_model || 'Pay-as-you-go',
+          pricing_tier: detailedSKU,  // Use detailed SKU instead of generic tier
+          pricing_url: sc.pricing_url || '',
+          assumptions: {},
+          cost_breakdown: {},
+        };
+      }),
       total_monthly_cost_low: kgCost.total_monthly_cost_low,
       total_monthly_cost_medium: kgCost.total_monthly_cost_medium,
       total_monthly_cost_high: kgCost.total_monthly_cost_high,
