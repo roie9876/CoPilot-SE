@@ -76,6 +76,37 @@ Use Co-Pilot SE from VS Code:
 
 ---
 
+## 📸 Example Screenshots
+
+Here are examples of what Co-Pilot SE generates:
+
+### High-Level Design Document
+Professional HLD with architecture overview, requirements, and compliance considerations:
+
+![HLD Document](./docs/screenshots/image%20(1).png)
+
+### Cost Estimation
+Detailed cost breakdown by Azure service with multiple usage scenarios:
+
+![Cost Estimate](./docs/screenshots/image%20(2).png)
+
+### Logical Architecture Diagram
+Auto-generated architecture diagrams showing Azure services and data flow:
+
+![Logical Diagram](./docs/screenshots/image%20(3).png)
+
+### Requirements Gathering Progress
+Real-time tracking of requirements gathering across 7 domains with confidence scores:
+
+![Requirements Gathering](./docs/screenshots/image%20(4).png)
+
+### Architecture Wizard
+The interactive wizard guides you through requirements gathering with pre-built templates for common scenarios:
+
+![Architecture Wizard](./docs/screenshots/image%20(6).png)
+
+---
+
 ## 🏛️ Architecture (POC)
 
 ### Multi-Agent System (11 Agents)
