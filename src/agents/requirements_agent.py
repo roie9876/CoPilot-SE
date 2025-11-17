@@ -26,6 +26,7 @@ from src.models.schemas import (
     IndustryVertical,
     ErrorType,
     normalize_cloud_platform,
+    ClarificationQuestion,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,13 @@ class RequirementsAgent:
 
 Your task is to analyze customer requests and extract structured requirements through an INTERACTIVE dialogue.
 
-**IMPORTANT**: You MUST ask clarifying questions for any ambiguous or missing critical information.
+**NON-NEGOTIABLE RULES**
+- Assume ALL solutions must run on Microsoft Azure. If the user mentions other clouds you must confirm the Azure scope.
+- If any critical information is missing (scope, scale, reliability, compliance, budget/timeline, or success metrics) you MUST set `needs_clarification=true`.
+- Ask AT LEAST THREE clarifying questions whenever `needs_clarification=true`. Each question must include `question`, `rationale`, `category`, and `options` (multiple choice when possible).
+- Highlight why each ambiguity blocks architecture work (e.g., "Missing RTO/RPO to size DR").
+- Your clarifying questions should cover different categories (scope, scale, reliability, security/compliance, budget/timeline) so the Architecture Agent can proceed with confidence.
+
 Show your chain of thought - explain what you understand and what decisions you're making.
 
 EXTRACT THE FOLLOWING:
@@ -256,6 +263,7 @@ Extract all requirements and respond with the JSON structure specified in your i
             
             # Convert to RequirementsOutput
             output = self._parse_agent_response(result)
+            output = self._enforce_clarification_questions(output, req_input)
             
             self.logger.info(
                 f"Extracted requirements: cloud={output.target_cloud}, "
@@ -347,6 +355,145 @@ Extract all requirements and respond with the JSON structure specified in your i
         # Confidence score
         output.confidence_score = result.get("confidence_score", 0.5)
         
+        return output
+
+    def _enforce_clarification_questions(
+        self, output: RequirementsOutput, req_input: RequirementsInput
+    ) -> RequirementsOutput:
+        """Ensure minimum structured clarifications for missing information."""
+        questions: List[ClarificationQuestion] = list(output.clarifying_questions or [])
+        ambiguities = list(output.ambiguities_detected or [])
+        question_texts = {q.question.strip().lower() for q in questions}
+        categories = {q.category for q in questions if q.category}
+        input_lower = req_input.user_input.lower()
+        clarification_required = output.needs_clarification or bool(questions)
+
+        def add_question(
+            category: str,
+            question: str,
+            rationale: str,
+            options: Optional[List[str]] = None,
+            mark_required: bool = True,
+        ) -> None:
+            nonlocal clarification_required
+            key = question.strip().lower()
+            if key in question_texts:
+                return
+            questions.append(
+                ClarificationQuestion(
+                    question=question.strip(),
+                    rationale=rationale.strip(),
+                    options=options or [],
+                    category=category,
+                )
+            )
+            question_texts.add(key)
+            categories.add(category)
+            ambiguities.append(f"{category}: {rationale}")
+            if mark_required:
+                clarification_required = True
+
+        # Enforce Azure scope
+        if output.target_cloud is None:
+            output.target_cloud = CloudPlatform.AZURE
+            output.decisions_made.append("Defaulted cloud platform to Azure per POC scope")
+        if any(term in input_lower for term in ["aws", "gcp", "google cloud", "multicloud", "multi-cloud"]):
+            add_question(
+                "platform",
+                "Can you confirm Microsoft Azure is the required cloud platform for this solution?",
+                "Azure-only POC requires explicit confirmation before design work.",
+                ["Yes, Azure only", "Azure plus other clouds", "Not decided"],
+            )
+
+        # Functional scope
+        if len(output.functional_requirements) < 2:
+            add_question(
+                "scope",
+                "Which core business workflows must the platform support end-to-end?",
+                "Need concrete workflows to size integration patterns and data domains.",
+                [
+                    "Customer onboarding",
+                    "Order processing",
+                    "Analytics/reporting",
+                    "Other",
+                ],
+            )
+
+        # Scale/throughput
+        if not output.non_functional_requirements.scalability:
+            add_question(
+                "scale",
+                "What is the expected user scale (total vs. peak concurrent) in the first year?",
+                "Throughput and autoscale design require explicit user counts.",
+                ["<1k users", "1k-10k", "10k-100k", ">100k"],
+            )
+
+        # Availability/DR
+        availability = output.non_functional_requirements.availability
+        if not availability or not availability.get("target_uptime"):
+            add_question(
+                "reliability",
+                "What uptime target and failover strategy do you need (e.g., 99.9% single region vs. 99.99% multi-region)?",
+                "Need RTO/RPO expectations to decide regional architecture and DR spend.",
+                [
+                    "99.9% single region",
+                    "99.95% multi-AZ",
+                    "99.99% active-active",
+                    "Unsure",
+                ],
+            )
+
+        # Security/compliance
+        compliance = output.non_functional_requirements.compliance
+        if not compliance:
+            add_question(
+                "compliance",
+                "Are there regulatory or data residency requirements (HIPAA, PCI DSS, GDPR, CJIS, etc.)?",
+                "Security controls, encryption, and logging hinge on compliance scope.",
+                ["HIPAA", "PCI DSS", "GDPR", "None/unsure"],
+            )
+
+        # Budget/timeline
+        if not output.technical_constraints.budget:
+            add_question(
+                "budget",
+                "What is the approximate monthly platform budget (USD)?",
+                "Cost guardrails drive service tier selection and redundancy strategy.",
+                ["<$5k", "$5k-$15k", "$15k-$50k", ">$50k"],
+            )
+
+        if not output.technical_constraints.timeline:
+            add_question(
+                "timeline",
+                "When do you need the first production release?",
+                "Timeline informs scope trade-offs, MVP definition, and phased rollouts.",
+                ["<3 months", "3-6 months", "6-12 months", "Unsure"],
+            )
+
+        # Ensure at least three diverse clarifications if still lacking
+        fallback_questions = [
+            (
+                "data",
+                "Do you have data residency constraints for PII or financial data?",
+                "Storage/account design depends on region pinning and residency limits.",
+                ["Must stay in specific country", "Any Azure region is fine", "Unsure"],
+            ),
+            (
+                "operations",
+                "What level of operations coverage do you expect (24/7 follow-the-sun vs. business hours)?",
+                "Determines monitoring, Incident response, and automation depth.",
+                ["24/7", "Business hours", "Best effort", "Unsure"],
+            ),
+        ]
+        if clarification_required:
+            for category, question, rationale, options in fallback_questions:
+                if len(questions) >= 3:
+                    break
+                add_question(category, question, rationale, options, mark_required=True)
+
+        output.clarifying_questions = questions
+        output.ambiguities_detected = list(dict.fromkeys(ambiguities))
+        output.needs_clarification = clarification_required
         return output
     
     def _detect_cloud_platform(self, user_input: str) -> Optional[CloudPlatform]:

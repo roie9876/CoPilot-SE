@@ -2,6 +2,7 @@ import React from 'react';
 import type { StageOutput } from '../types';
 import { StageApproval } from './StageApproval';
 import './Stage5View.css';
+import { ValidationWarningsBanner } from './ValidationWarningsBanner';
 
 interface Stage5ViewProps {
   stageOutput: StageOutput;
@@ -12,6 +13,7 @@ interface Stage5ViewProps {
   onBack?: () => void;
   onSeeAlternatives?: () => void;
   isLoading: boolean;
+  validationWarnings?: string[];
 }
 
 export const Stage5View: React.FC<Stage5ViewProps> = ({
@@ -20,6 +22,7 @@ export const Stage5View: React.FC<Stage5ViewProps> = ({
   onApprove,
   onBack,
   isLoading,
+  validationWarnings,
 }) => {
   return (
     <div className="stage5-view">
@@ -29,6 +32,8 @@ export const Stage5View: React.FC<Stage5ViewProps> = ({
         <h2>{stageOutput.stage_title}</h2>
         <p className="stage-description">{stageOutput.stage_description}</p>
       </div>
+
+      <ValidationWarningsBanner warnings={validationWarnings} />
 
       {/* Chain of Thought - Executive Summary */}
       {stageOutput.chain_of_thought && (

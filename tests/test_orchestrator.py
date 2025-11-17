@@ -12,6 +12,11 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+os.environ.setdefault("DISABLE_AZURE_AGENTS", "true")
+os.environ.setdefault("AZURE_AI_PROJECT", "mock-project")
+os.environ.setdefault("MODEL_DEPLOYMENT_NAME", "mock-model")
+os.environ.setdefault("AZURE_SUBSCRIPTION_ID", "00000000-0000-0000-0000-000000000000")
+
 from src.orchestrator import IntentExtractor, KnowledgeGraphOrchestrator
 
 

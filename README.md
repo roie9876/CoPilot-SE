@@ -4,7 +4,7 @@
 
 [![Status](https://img.shields.io/badge/status-POC%20development-blue)](./docs/00-project-overview.md)
 [![Phase](https://img.shields.io/badge/phase-Phase%201%20foundation-orange)](./docs/07-implementation-roadmap.md)
-[![Version](https://img.shields.io/badge/version-2.0%20multi--cloud%20POC-green)](./docs/README.md)
+[![Version](https://img.shields.io/badge/version-2.1%20azure--only%20refresh-green)](./docs/README.md)
 [![Timeline](https://img.shields.io/badge/timeline-8--10%20weeks-purple)](./docs/07-implementation-roadmap.md)
 
 ---
@@ -76,7 +76,21 @@ Use Co-Pilot SE from VS Code:
 
 ---
 
-## 📸 Example Screenshots
+## � November 2025 Azure-only Refresh
+
+The November 17 update tightened Azure-only guardrails across the stack:
+
+- **Requirements Agent** now enforces *at least three* structured clarifying questions (scope, scale, reliability, compliance, budget/timeline) whenever `needs_clarification=true`. Each question includes `question`, `rationale`, `category`, and multi-choice `options`.
+- **Master Orchestrator** supports up to three clarification rounds with session tokens, tracks reviewer context, and returns new workflow metadata fields (`clarification_rounds`, `requirements_diff`, `architecture_validation_warnings`). API clients must persist the returned `session_id` until the workflow completes.
+- **Architecture Agent** is strictly Azure-only, normalizes service names against a curated catalog, and emits `validation_warnings` whenever inputs reference unsupported services. The frontend surfaces these via the new `ValidationWarningsBanner` component.
+- **Intent Extractor** includes a deterministic mock mode enabled with `DISABLE_AZURE_AGENTS=true`, allowing local tests to run without Azure AI Agents connectivity.
+- **API & Frontend** responses include the new metadata so operators can inspect clarification history, reviewer context, and any service normalization that occurred before sign-off.
+
+Refer to [`docs/03-agent-specifications.md`](./docs/03-agent-specifications.md) for a deeper dive.
+
+---
+
+## �📸 Example Screenshots
 
 Here are examples of what Co-Pilot SE generates:
 
@@ -174,9 +188,9 @@ Co-Pilot SE uses **11 specialized AI agents** coordinated by two orchestrators:
 
 ---
 
-## 📚 Documentation (v2.0 - Multi-Cloud POC)
+## 📚 Documentation (v2.1 - Azure-Only POC)
 
-Comprehensive design documentation for the **10-user multi-cloud POC** is available in the [`/docs`](./docs/) folder:
+Comprehensive design documentation for the **10-user Azure-only POC** is available in the [`/docs`](./docs/) folder:
 
 | Document | Purpose |
 |----------|---------|
@@ -238,7 +252,7 @@ pytest tests/
 npm test --prefix mcp-server
 ```
 
-**Full setup guide:** [Implementation Roadmap - Phase 1](./docs/07-implementation-roadmap.md#phase-1-foundation--multi-cloud-research)
+**Full setup guide:** [Implementation Roadmap - Phase 1](./docs/07-implementation-roadmap.md#phase-1-foundation--multi-cloud-research) (Azure foundation + agent hardening)
 
 **Note:** No RAG infrastructure needed (no vector store, no document ingestion)
 
@@ -260,7 +274,7 @@ npm test --prefix mcp-server
 
 **Next Phase: Foundation & Multi-Cloud Research (Week 1-2)**
 - 🔲 Provision simplified Azure infrastructure (no RAG components)
-- 🔲 Complete multi-cloud service mapping (AWS/GCP/Azure/Oracle)
+- 🔲 Finalize Azure service catalog + validation guardrails
 - 🔲 Validate all 30+ trusted sources accessible
 - 🔲 Set up development environment
 - 🔲 Team onboarding
@@ -382,7 +396,7 @@ copilot-se/
 ## 👥 Team (POC)
 
 ### Core Team (8 people)
-- **Tech Lead / Architect:** [Name] - Overall architecture, multi-cloud strategy
+- **Tech Lead / Architect:** [Name] - Overall architecture, Azure guardrail strategy
 - **Product Manager:** [Name] - Requirements, pilot management, user research
 - **AI/ML Engineers (2):** [Names] - Agent development, prompts, LLM integration
 - **Backend Engineers (2):** [Names] - Azure Functions, API, Bing Search integration

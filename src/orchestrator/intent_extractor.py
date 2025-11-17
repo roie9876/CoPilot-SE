@@ -10,6 +10,7 @@ Analyzes natural language user input and extracts:
 
 import os
 import json
+import logging
 from typing import Dict, Any, Optional
 from azure.ai.agents import AgentsClient
 from azure.ai.agents.models import Agent, AgentThread
@@ -32,6 +33,18 @@ class IntentExtractor:
 
     def __init__(self):
         """Initialize the Intent Extractor with Azure AI Agents Service."""
+        self.logger = logging.getLogger(__name__)
+        self.use_mock = self._should_use_mock_mode()
+
+        if self.use_mock:
+            self.logger.info("IntentExtractor running in mock mode. Azure AI Agent calls are disabled.")
+            self.azure_endpoint = None
+            self.model_deployment = None
+            self.credential = None
+            self.agents_client = None
+            self.agent = None
+            return
+
         # Get Azure AI Foundry Project endpoint (required for Agents API)
         self.azure_endpoint = os.getenv("AZURE_AI_PROJECT")
         self.model_deployment = os.getenv("MODEL_DEPLOYMENT_NAME") or os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")
@@ -48,6 +61,20 @@ class IntentExtractor:
 
         # Create the intent extraction agent
         self.agent = self._create_agent()
+
+    def _should_use_mock_mode(self) -> bool:
+        """Determine whether to bypass Azure Agents (used for tests/offline runs)."""
+        mock_flag = os.getenv("DISABLE_AZURE_AGENTS", "").strip().lower() in {"1", "true", "yes"}
+        if mock_flag:
+            return True
+        required = ["AZURE_AI_PROJECT", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY"]
+        missing = [var for var in required if not os.getenv(var)]
+        if missing:
+            logging.getLogger(__name__).warning(
+                "Missing Azure configuration %s; falling back to mock intent extraction.", missing
+            )
+            return True
+        return False
 
     def _create_agent(self) -> Agent:
         """Create the intent extraction agent with specialized instructions."""
@@ -125,6 +152,9 @@ If information is ambiguous, use:
         """
         if not user_input or not user_input.strip():
             raise ValueError("User input cannot be empty")
+
+        if self.use_mock:
+            return self._mock_extract(user_input)
 
         try:
             # Create thread and run the agent - this returns a streaming response
@@ -219,6 +249,9 @@ If information is ambiguous, use:
         Returns:
             Dictionary of domain fields to pre-populate
         """
+        if self.use_mock:
+            return self._mock_initial_facts(user_input)
+
         try:
             prompt = f"""Given this user input and context, extract specific technical facts:
 
@@ -324,3 +357,90 @@ If nothing is mentioned for a section, return empty object {{}}.
                 self.agents_client.delete_agent(self.agent.id)
         except Exception:
             pass  # Ignore cleanup errors
+
+    # ------------------------------------------------------------------
+    # Mock helpers (used during tests/offline runs)
+    # ------------------------------------------------------------------
+    def _mock_extract(self, user_input: str) -> Context:
+        """Lightweight deterministic extractor for offline/testing use."""
+        lowered = user_input.lower()
+
+        intent = "new_deployment"
+        if "disaster" in lowered or "dr" in lowered:
+            intent = "dr_only"
+        elif "migrate" in lowered or "migration" in lowered:
+            intent = "migration"
+        elif "optimize cost" in lowered or "cost" in lowered:
+            intent = "optimize_cost"
+        elif "security" in lowered:
+            intent = "optimize_security"
+
+        workload = "web_app"
+        if "api" in lowered:
+            workload = "api"
+        elif "mobile" in lowered:
+            workload = "mobile_backend"
+        elif "aks" in lowered or "microservice" in lowered or "container" in lowered:
+            workload = "microservices"
+        elif "data" in lowered or "analytics" in lowered:
+            workload = "data_pipeline"
+
+        context = Context(
+            intent=Intent(intent),
+            cloud_provider=CloudProvider("azure"),
+            workload_type=WorkloadType(workload),
+            business_description=user_input.strip(),
+        )
+        return context
+
+    def _mock_initial_facts(self, user_input: str) -> Dict[str, Any]:
+        """Return heuristic facts without calling Azure services."""
+        facts: Dict[str, Any] = {
+            "identity_access": {},
+            "runtime_platform": {},
+            "networking_connectivity": {},
+            "data_persistence": {},
+            "resiliency_dr": {},
+            "security_governance": {},
+        }
+
+        lowered = user_input.lower()
+
+        if "azure ad" in lowered or "entra" in lowered:
+            facts["identity_access"]["auth_provider"] = "entra_id"
+        if "mfa" in lowered:
+            facts["identity_access"]["mfa_policy"] = "required"
+
+        if "aks" in lowered:
+            facts["runtime_platform"]["target_runtime"] = "aks"
+            facts["runtime_platform"]["containerized"] = True
+        elif "app service" in lowered:
+            facts["runtime_platform"]["target_runtime"] = "app_service"
+        elif "functions" in lowered:
+            facts["runtime_platform"]["target_runtime"] = "functions"
+
+        if "private" in lowered:
+            facts["networking_connectivity"]["exposure"] = "private"
+        elif "public" in lowered or "internet" in lowered:
+            facts["networking_connectivity"]["exposure"] = "public"
+
+        if "sql" in lowered:
+            facts["data_persistence"]["primary_db_engine"] = "azure_sql"
+        elif "cosmos" in lowered:
+            facts["data_persistence"]["primary_db_engine"] = "cosmos_db"
+
+        if "multi-region" in lowered or "multi region" in lowered:
+            facts["resiliency_dr"]["multi_region"] = True
+        if "rpo" in lowered or "rto" in lowered or "dr" in lowered:
+            facts["resiliency_dr"]["dr_focus"] = True
+
+        if "pci" in lowered or "gdpr" in lowered or "hipaa" in lowered:
+            frameworks = facts["security_governance"].setdefault("compliance_frameworks", [])
+            if "pci" in lowered:
+                frameworks.append("pci")
+            if "gdpr" in lowered:
+                frameworks.append("gdpr")
+            if "hipaa" in lowered:
+                frameworks.append("hipaa")
+
+        return {k: v for k, v in facts.items() if v}

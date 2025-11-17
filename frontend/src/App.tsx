@@ -36,8 +36,28 @@ function App() {
   // Saved designs state
   const [showSavedDesigns, setShowSavedDesigns] = useState(false);
 
+  const extractWarnings = (payload: OrchestratorOutput | null): string[] => {
+    if (!payload) {
+      return [];
+    }
+    if (payload.architecture_validation_warnings && payload.architecture_validation_warnings.length > 0) {
+      return payload.architecture_validation_warnings;
+    }
+    if (payload.workflow_metadata?.architecture_validation_warnings && payload.workflow_metadata.architecture_validation_warnings.length > 0) {
+      return payload.workflow_metadata.architecture_validation_warnings;
+    }
+    if (payload.architecture?.validation_warnings && payload.architecture.validation_warnings.length > 0) {
+      return payload.architecture.validation_warnings;
+    }
+    return [];
+  };
+
+  const stageWarnings = extractWarnings(stageData);
+  const resultWarnings = extractWarnings(result);
+
   // Legacy submit handler (kept for reference, not currently used)
   // @ts-expect-error - unused variable kept for reference
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSubmit = async (requirements: string) => {
     console.log('handleSubmit called with:', requirements);
     setLoading(true);
@@ -264,7 +284,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100" style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)' }}>
+  <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100" style={{ minHeight: '100vh', background: 'linear-gradient(to bottom right, #eff6ff, #e0e7ff)' }}>
       {/* Header */}
       <header className="bg-white shadow-md" style={{ backgroundColor: 'white' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -326,6 +346,7 @@ function App() {
                 onBack={handleGoBack}
                 onSeeAlternatives={handleSeeAlternatives}
                 isLoading={loading}
+                validationWarnings={stageWarnings}
               />
             )}
             {stageData.conversation_stage === 'stage_3_data' && (
@@ -338,6 +359,7 @@ function App() {
                 onBack={handleGoBack}
                 onSeeAlternatives={handleSeeAlternatives}
                 isLoading={loading}
+                validationWarnings={stageWarnings}
               />
             )}
             {stageData.conversation_stage === 'stage_4_security' && (
@@ -350,6 +372,7 @@ function App() {
                 onBack={handleGoBack}
                 onSeeAlternatives={handleSeeAlternatives}
                 isLoading={loading}
+                validationWarnings={stageWarnings}
               />
             )}
             {stageData.conversation_stage === 'stage_5_review' && (
@@ -362,6 +385,7 @@ function App() {
                 onBack={handleGoBack}
                 onSeeAlternatives={handleSeeAlternatives}
                 isLoading={loading}
+                validationWarnings={stageWarnings}
               />
             )}
           </>
@@ -478,6 +502,7 @@ function App() {
                     architecture={result.architecture} 
                     costs={result.costs}
                     documentation={result.documentation}
+                    validationWarnings={resultWarnings}
                   />
                 )}
                 {activeTab === 'cost' && result.costs && <CostView costs={result.costs} />}

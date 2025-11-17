@@ -1,8 +1,8 @@
 # Agent Specifications
 
 **Project:** Co-Pilot for Solution Engineers  
-**Version:** 2.0 (Multi-Cloud POC)  
-**Date:** October 31, 2025
+**Version:** 2.1 (Azure-only Clarification Refresh)  
+**Date:** November 17, 2025
 
 ---
 
@@ -29,13 +29,25 @@ The Co-Pilot SE system uses a **multi-agent architecture** with 4 specialized ag
 |-------|---------|-----|------------------|
 | **Master Orchestrator** | Workflow coordination | GPT-5 | Routing, state management, aggregation |
 | **Requirements Agent** | Extract requirements | GPT-5 | NLP parsing, cloud selection, clarification |
-| **Architecture Agent** | Multi-cloud design | GPT-5 | AWS/GCP/Azure/Oracle architecture, best practices |
+| **Architecture Agent** | Azure-only architecture design | GPT-5 via Microsoft Agent Framework + Bing grounding | Guardrailed Azure service selection, Mermaid diagrams, Well-Architected guidance, validation warnings |
 | **Cost Agent** | Cost estimation | GPT-5 | Pricing research, calculation, scenarios |
 | **Documentation Agent** | Generate deliverables | GPT-5 | HLD creation, diagram generation, formatting |
 
 ### Removed from POC
 
 **Compliance Validation Agent** - Out of scope for initial POC. May be added in future phases.
+
+### November 2025 Refresh Summary
+
+The November 17, 2025 code drop introduced several Azure-only guardrails that engineers should be aware of when reading the legacy prompts below:
+
+- **Requirements Agent (`src/agents/requirements_agent.py`)** now enforces a *minimum of three* structured clarifying questions that span different categories (scope, scale, reliability, compliance, budget, timeline). If downstream code sets `needs_clarification=true`, the agent must provide `ClarificationQuestion` objects with `question`, `rationale`, `category`, and multiple-choice `options`.
+- **Master Orchestrator (`src/orchestrator/master_orchestrator.py`)** gained multi-round clarification sessions (up to 3 rounds), session caching, and new workflow metadata fields (`clarification_rounds`, `requirements_diff`, `reviewer_context`, `architecture_validation_warnings`). Any caller of `/api/clarify` must persist the `session_id` that is now returned with `WorkflowStatus.NEEDS_CLARIFICATION`.
+- **Architecture Agent (`src/agents/architecture_agent.py`)** is strictly Azure-only, consumes curated service catalogs, normalizes/filters services, and emits `validation_warnings` whenever non-Azure services are removed or aliases are auto-corrected. Workflow context (clarification rounds, reviewer expectations, deltas) is now part of the prompt.
+- **Intent Extractor (`src/orchestrator/intent_extractor.py`)** supports an offline `DISABLE_AZURE_AGENTS=true` mock mode so tests can bypass Azure Agent Service dependencies.
+- **API/Frontend** (`api/server.py`, `frontend/src/types.ts`, `frontend/src/components/ValidationWarningsBanner.tsx`) surface the new metadata and warnings so operators can see when the architecture was auto-corrected.
+
+When implementing new features, align with these behaviors even if older prompt examples below still mention “multi-cloud”.
 
 ### Agent Workflow
 

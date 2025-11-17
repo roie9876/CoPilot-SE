@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { StageOutput } from '../types';
 import { StageApproval } from './StageApproval';
 import './Stage3View.css';
+import { ValidationWarningsBanner } from './ValidationWarningsBanner';
 
 interface Stage3ViewProps {
   stageOutput: StageOutput;
@@ -12,6 +13,7 @@ interface Stage3ViewProps {
   onBack?: () => void;
   onSeeAlternatives?: () => void;
   isLoading: boolean;
+  validationWarnings?: string[];
 }
 
 export const Stage3View: React.FC<Stage3ViewProps> = ({
@@ -22,6 +24,7 @@ export const Stage3View: React.FC<Stage3ViewProps> = ({
   onBack,
   onSeeAlternatives,
   isLoading,
+  validationWarnings,
 }) => {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
@@ -51,6 +54,8 @@ export const Stage3View: React.FC<Stage3ViewProps> = ({
         <h2>{stageOutput.stage_title}</h2>
         <p className="stage-description">{stageOutput.stage_description}</p>
       </div>
+
+      <ValidationWarningsBanner warnings={validationWarnings} />
 
       {/* Chain of Thought */}
       {stageOutput.chain_of_thought && (

@@ -38,6 +38,7 @@ from src.models.schemas import (
     AgentError,
     AgentException,
     ErrorType,
+    ClarificationQuestion,
     # New stage-based models
     ConversationStage,
     StageOutput,
@@ -63,6 +64,8 @@ class MasterOrchestrator:
     - Workflow metadata tracking (timings, status, errors)
     - Clarification flow support (pauses if Requirements Agent needs input)
     """
+
+    MAX_CLARIFICATION_ROUNDS = 3
 
     def __init__(self, max_retries: int = 2, retry_delay: float = 2.0):
         """
@@ -93,6 +96,7 @@ class MasterOrchestrator:
         
         # NEW: Knowledge Graph state (for interactive workflow)
         self.current_kg: Optional['KnowledgeGraph'] = None
+        self.session_cache: Dict[str, Dict[str, Any]] = {}
         
         self.logger.info("MasterOrchestrator initialized with Knowledge Graph support")
 
@@ -116,10 +120,14 @@ class MasterOrchestrator:
         try:
             # Initialize workflow metadata
             self._initialize_workflow_metadata()
+            self.workflow_metadata["last_user_request"] = user_input
             
             # Stage 1: Requirements Analysis
             self.logger.info("Stage 1: Requirements Analysis")
             requirements_output = await self._execute_requirements_stage(user_input, context)
+            requirements_output.source_user_input = user_input
+            requirements_output.clarification_round = 0
+            self._update_reviewer_context(requirements_output, None, None)
             
             # Check if clarification is needed - PAUSE workflow and return to user
             if requirements_output.needs_clarification and requirements_output.clarifying_questions:
@@ -130,6 +138,9 @@ class MasterOrchestrator:
                 # Generate session ID for continuing this conversation
                 import uuid
                 session_id = str(uuid.uuid4())
+                requirements_output.clarification_round = 1
+                self._register_clarification_session(session_id, user_input, requirements_output)
+                self.workflow_metadata["clarification_rounds"] = 1
                 
                 # Store partial state (for session management - in production, use Redis/DB)
                 self.workflow_metadata["session_id"] = session_id
@@ -153,7 +164,10 @@ class MasterOrchestrator:
                         total_duration_seconds=workflow_duration,
                         agents_invoked=["RequirementsAgent"],
                         start_time=datetime.fromtimestamp(workflow_start),
-                        end_time=None  # Not finished yet
+                        end_time=None,  # Not finished yet
+                        clarification_rounds=self.workflow_metadata.get("clarification_rounds", 1),
+                        requirements_diff=self.workflow_metadata.get("requirements_diff"),
+                        reviewer_context=self.workflow_metadata.get("reviewer_context"),
                     ),
                     errors=[e.model_dump() for e in self.all_errors] if self.all_errors else [],
                 )
@@ -196,7 +210,16 @@ class MasterOrchestrator:
                     total_duration_seconds=workflow_duration,
                     agents_invoked=["RequirementsAgent", "ArchitectureAgent", "CostAgent", "DocumentationAgent"],
                     start_time=datetime.fromtimestamp(workflow_start),
-                    end_time=datetime.utcnow()
+                    end_time=datetime.utcnow(),
+                    clarification_rounds=self.workflow_metadata.get("clarification_rounds", 0),
+                    requirements_diff=self.workflow_metadata.get("requirements_diff"),
+                    reviewer_context=self.workflow_metadata.get("reviewer_context"),
+                    architecture_validation_warnings=self.workflow_metadata.get(
+                        "architecture_validation_warnings", []
+                    ),
+                ),
+                architecture_validation_warnings=self.workflow_metadata.get(
+                    "architecture_validation_warnings", []
                 ),
                 errors=[e.model_dump() for e in self.all_errors] if self.all_errors else [],
             )
@@ -541,6 +564,7 @@ class MasterOrchestrator:
             # Record stage timing
             self.workflow_metadata["architecture_stage_duration"] = time.time() - stage_start
             self.workflow_metadata["total_services_selected"] = len(result.services)
+            self._record_architecture_validation_warnings(result.validation_warnings)
             
             self.logger.info(f"✅ Architecture generated: {len(result.services)} services selected")
             
@@ -563,10 +587,23 @@ class MasterOrchestrator:
         stage_start = time.time()
         
         try:
+            workflow_context = {
+                "clarification_round": requirements.clarification_round,
+                "requirements_diff": self.workflow_metadata.get("requirements_diff"),
+                "reviewer_context": self.workflow_metadata.get("reviewer_context"),
+                "source_user_input": requirements.source_user_input,
+                "current_understanding": requirements.current_understanding,
+                "decisions_made": requirements.decisions_made,
+                "ambiguities": requirements.ambiguities_detected,
+            }
+            # Remove empty values to keep payload lean
+            workflow_context = {k: v for k, v in workflow_context.items() if v}
+
             architecture_input = ArchitectureInput(
                 requirements=requirements,
                 target_cloud=requirements.target_cloud,
-                context={},
+                region=requirements.region or None,
+                workflow_context=workflow_context,
             )
             
             result = await self._invoke_with_retry(
@@ -582,6 +619,7 @@ class MasterOrchestrator:
             # Record stage timing
             self.workflow_metadata["architecture_stage_duration"] = time.time() - stage_start
             self.workflow_metadata["total_services_selected"] = len(result.services)
+            self._record_architecture_validation_warnings(result.validation_warnings)
             
             return result
             
@@ -686,6 +724,17 @@ class MasterOrchestrator:
             self.all_errors.append(error)
             raise AgentException(error)
 
+    def _record_architecture_validation_warnings(self, warnings: Optional[List[str]]) -> None:
+        """Persist architecture validation warnings for downstream consumers."""
+        if warnings:
+            self.workflow_metadata["architecture_validation_warnings"] = warnings
+            self.logger.warning(
+                "Architecture validation warnings detected: %s",
+                "; ".join(warnings)
+            )
+        else:
+            self.workflow_metadata["architecture_validation_warnings"] = []
+
     async def _invoke_with_retry(
         self,
         agent: Any,
@@ -774,6 +823,11 @@ class MasterOrchestrator:
                 "cost_agent": "1.0.0",
                 "documentation_agent": "1.0.0",
             },
+            "clarification_rounds": 0,
+            "requirements_diff": None,
+            "reviewer_context": None,
+            "last_user_request": None,
+            "architecture_validation_warnings": [],
         }
         
         # Reset citations and errors
@@ -858,32 +912,116 @@ class MasterOrchestrator:
         self.logger.info(f"Continuing workflow after clarification (session: {session_id})")
         
         try:
-            # Reconstruct RequirementsOutput from partial data
-            # Clean up None values for list fields (convert to empty lists)
+            session_state = self.session_cache.get(session_id, {})
             cleaned_requirements = self._clean_requirements_dict(partial_requirements)
-            requirements_output = RequirementsOutput(**cleaned_requirements)
-            
-            # Update requirements based on user answers
-            # Add clarification answers to context for transparency
-            requirements_output.chain_of_thought = (
-                f"{requirements_output.chain_of_thought or ''}\n\n"
-                f"User provided clarifications: {json.dumps(clarification_answers, indent=2)}"
+            previous_requirements = RequirementsOutput(**cleaned_requirements)
+            original_request = (
+                session_state.get("original_request")
+                or previous_requirements.source_user_input
+                or self.workflow_metadata.get("last_user_request")  # type: ignore[arg-type]
+                or previous_requirements.current_understanding
+                or ""
             )
-            requirements_output.needs_clarification = False
-            requirements_output.clarifying_questions = []
+            if not original_request:
+                raise ValueError("Original user request missing; cannot replay clarification")
+            
+            current_round = session_state.get("clarification_round", 1)
+            self._record_clarification_round(session_state, clarification_answers, current_round)
+            
+            refined_request = self._compose_refined_request(
+                original_request,
+                session_state.get("clarification_history", []),
+                clarification_answers,
+            )
+            clarification_context = {
+                "previous_requirements": previous_requirements.model_dump(),
+                "clarification_history": session_state.get("clarification_history", []),
+                "clarification_round": current_round,
+                "latest_answers": clarification_answers,
+            }
+            refined_input = RequirementsInput(
+                user_input=refined_request,
+                context=clarification_context,
+            )
+            refined_output = await self._invoke_with_retry(
+                agent=self.requirements_agent,
+                input_data=refined_input.model_dump(),
+                stage_name="Requirements Clarification"
+            )
+            refined_output.source_user_input = original_request
+            refined_output.clarification_round = current_round
+            refined_output.chain_of_thought = (
+                f"{refined_output.chain_of_thought or ''}\n\n"
+                f"User clarifications (round {current_round}): {json.dumps(clarification_answers, indent=2)}"
+            )
+            diff_summary = self._diff_requirements(previous_requirements, refined_output)
+            self.workflow_metadata["clarification_rounds"] = current_round
+            self.workflow_metadata["requirements_diff"] = diff_summary
+            self._update_reviewer_context(
+                refined_output,
+                session_state.get("clarification_history"),
+                diff_summary,
+            )
+            
+            if refined_output.needs_clarification and refined_output.clarifying_questions:
+                if current_round >= self.MAX_CLARIFICATION_ROUNDS:
+                    self.logger.warning(
+                        "Maximum clarification rounds reached; proceeding with best-effort requirements"
+                    )
+                    refined_output.needs_clarification = False
+                    refined_output.clarifying_questions = []
+                else:
+                    next_round = current_round + 1
+                    session_state["clarification_round"] = next_round
+                    session_state["requirements_snapshot"] = refined_output.model_dump()
+                    session_state["pending_questions"] = [
+                        q.model_dump() for q in refined_output.clarifying_questions
+                    ]
+                    self.session_cache[session_id] = session_state
+                    workflow_duration = time.time() - workflow_start
+                    self.logger.info(
+                        "Additional clarification required (round %s)", next_round
+                    )
+                    return OrchestratorOutput(
+                        status=WorkflowStatus.NEEDS_CLARIFICATION,
+                        current_stage="requirements_clarification",
+                        requirements=refined_output.model_dump(),
+                        clarifying_questions=refined_output.clarifying_questions,
+                        chain_of_thought=refined_output.chain_of_thought,
+                        decisions_made=refined_output.decisions_made,
+                        current_understanding=refined_output.current_understanding,
+                        ambiguities=refined_output.ambiguities_detected,
+                        session_id=session_id,
+                        awaiting_response=True,
+                        citations=self.all_citations,
+                        workflow_metadata=WorkflowMetadata(
+                            stages_completed=["requirements", "clarification_pending"],
+                            total_duration_seconds=workflow_duration,
+                            agents_invoked=["RequirementsAgent"],
+                            start_time=datetime.fromtimestamp(workflow_start),
+                            end_time=None,
+                            clarification_rounds=next_round,
+                            requirements_diff=diff_summary,
+                            reviewer_context=self.workflow_metadata.get("reviewer_context"),
+                        ),
+                        errors=[e.model_dump() for e in self.all_errors] if self.all_errors else [],
+                    )
+            
+            # Clarification satisfied - remove session cache entry
+            self.session_cache.pop(session_id, None)
             
             # Continue with Architecture stage
             self.logger.info("Stage 2: Architecture Design (after clarification)")
-            architecture_output = await self._execute_architecture_stage(requirements_output)
+            architecture_output = await self._execute_architecture_stage(refined_output)
             
             # Stage 3: Cost Estimation
             self.logger.info("Stage 3: Cost Estimation")
-            cost_output = await self._execute_cost_stage(requirements_output, architecture_output)
+            cost_output = await self._execute_cost_stage(refined_output, architecture_output)
             
             # Stage 4: Documentation Generation
             self.logger.info("Stage 4: Documentation Generation")
             documentation_output = await self._execute_documentation_stage(
-                requirements_output,
+                refined_output,
                 architecture_output,
                 cost_output
             )
@@ -895,13 +1033,14 @@ class MasterOrchestrator:
             # Deduplicate citations
             unique_citations = self._deduplicate_citations(self.all_citations)
             
-            self.logger.info(f"Workflow completed successfully in {workflow_duration:.2f}s (after clarification)")
+            self.logger.info(
+                f"Workflow completed successfully in {workflow_duration:.2f}s (after clarification)"
+            )
             
-            # Return complete results
             return OrchestratorOutput(
                 status=WorkflowStatus.SUCCESS,
                 current_stage="completed",
-                requirements=requirements_output.model_dump(),
+                requirements=refined_output.model_dump(),
                 architecture=architecture_output.model_dump(),
                 costs=cost_output.model_dump(),
                 documentation=documentation_output.model_dump(),
@@ -911,7 +1050,16 @@ class MasterOrchestrator:
                     total_duration_seconds=workflow_duration,
                     agents_invoked=["RequirementsAgent", "ArchitectureAgent", "CostAgent", "DocumentationAgent"],
                     start_time=datetime.fromtimestamp(workflow_start),
-                    end_time=datetime.utcnow()
+                    end_time=datetime.utcnow(),
+                    clarification_rounds=current_round,
+                    requirements_diff=diff_summary,
+                    reviewer_context=self.workflow_metadata.get("reviewer_context"),
+                    architecture_validation_warnings=self.workflow_metadata.get(
+                        "architecture_validation_warnings", []
+                    ),
+                ),
+                architecture_validation_warnings=self.workflow_metadata.get(
+                    "architecture_validation_warnings", []
                 ),
                 errors=[e.model_dump() for e in self.all_errors] if self.all_errors else [],
             )
@@ -979,6 +1127,141 @@ class MasterOrchestrator:
                 nfr["compliance"] = []
         
         return cleaned
+
+    def _register_clarification_session(
+        self, session_id: str, user_input: str, requirements: RequirementsOutput
+    ) -> None:
+        """Persist clarification session metadata for multi-round handling."""
+        self.session_cache[session_id] = {
+            "original_request": user_input,
+            "clarification_round": requirements.clarification_round or 1,
+            "requirements_snapshot": requirements.model_dump(),
+            "clarification_history": [],
+            "pending_questions": [q.model_dump() for q in requirements.clarifying_questions],
+        }
+
+    def _record_clarification_round(
+        self,
+        session_state: Dict[str, Any],
+        clarification_answers: Dict[str, str],
+        round_number: int,
+    ) -> None:
+        """Store answered questions for auditing and future prompts."""
+        if not clarification_answers:
+            return
+        questions = session_state.pop("pending_questions", [])
+        history = session_state.setdefault("clarification_history", [])
+        history.append(
+            {
+                "round": round_number,
+                "questions": questions,
+                "answers": clarification_answers,
+                "recorded_at": datetime.utcnow().isoformat(),
+            }
+        )
+
+    def _compose_refined_request(
+        self,
+        original_request: str,
+        clarification_history: Optional[List[Dict[str, Any]]],
+        latest_answers: Dict[str, str],
+    ) -> str:
+        """Combine original prompt with clarification history for re-processing."""
+        lines: List[str] = [original_request.strip(), "", "Clarifications provided so far:"]
+        if clarification_history:
+            for entry in clarification_history:
+                lines.append(f"Round {entry.get('round')}:")
+                questions = entry.get("questions", [])
+                answers = entry.get("answers", {})
+                for question in questions:
+                    if isinstance(question, dict):
+                        question_text = question.get("question", "")
+                    else:
+                        question_text = str(question)
+                    answer_text = answers.get(question_text, "pending")
+                    if question_text:
+                        lines.append(f"- {question_text}: {answer_text}")
+        if latest_answers:
+            lines.append("Latest answers:")
+            for question, answer in latest_answers.items():
+                lines.append(f"- {question}: {answer}")
+        return "\n".join([line for line in lines if line])
+
+    def _diff_requirements(
+        self,
+        previous: RequirementsOutput,
+        current: RequirementsOutput,
+    ) -> Dict[str, Any]:
+        """Create a lightweight diff between two requirements snapshots."""
+        diff: Dict[str, Any] = {}
+
+        def diff_list(field_name: str, before: List[str], after: List[str]) -> None:
+            added = sorted(set(after) - set(before))
+            removed = sorted(set(before) - set(after))
+            if added or removed:
+                diff[field_name] = {"added": added, "removed": removed}
+
+        diff_list(
+            "functional_requirements",
+            previous.functional_requirements,
+            current.functional_requirements,
+        )
+        diff_list(
+            "implied_requirements",
+            previous.implied_requirements,
+            current.implied_requirements,
+        )
+
+        nfr_prev = previous.non_functional_requirements.model_dump()
+        nfr_curr = current.non_functional_requirements.model_dump()
+        nfr_changes: Dict[str, Any] = {}
+        for key in sorted(set(nfr_prev.keys()) | set(nfr_curr.keys())):
+            if nfr_prev.get(key) != nfr_curr.get(key):
+                nfr_changes[key] = {"before": nfr_prev.get(key), "after": nfr_curr.get(key)}
+        if nfr_changes:
+            diff["non_functional_requirements"] = nfr_changes
+
+        tc_prev = previous.technical_constraints.model_dump()
+        tc_curr = current.technical_constraints.model_dump()
+        tc_changes: Dict[str, Any] = {}
+        for key in sorted(set(tc_prev.keys()) | set(tc_curr.keys())):
+            if tc_prev.get(key) != tc_curr.get(key):
+                tc_changes[key] = {"before": tc_prev.get(key), "after": tc_curr.get(key)}
+        if tc_changes:
+            diff["technical_constraints"] = tc_changes
+
+        if previous.target_cloud != current.target_cloud:
+            diff["target_cloud"] = {
+                "before": previous.target_cloud,
+                "after": current.target_cloud,
+            }
+        if previous.region != current.region:
+            diff["region"] = {"before": previous.region, "after": current.region}
+        if previous.industry_vertical != current.industry_vertical:
+            diff["industry_vertical"] = {
+                "before": previous.industry_vertical,
+                "after": current.industry_vertical,
+            }
+
+        return diff
+
+    def _update_reviewer_context(
+        self,
+        requirements: Optional[RequirementsOutput],
+        clarification_history: Optional[List[Dict[str, Any]]],
+        diff_summary: Optional[Dict[str, Any]],
+    ) -> None:
+        """Persist context blob for future reviewer agent consumption."""
+        if not requirements:
+            return
+        try:
+            self.workflow_metadata["reviewer_context"] = {
+                "requirements": requirements.model_dump(),
+                "clarification_history": clarification_history or [],
+                "requirements_diff": diff_summary or {},
+            }
+        except Exception as err:  # pragma: no cover - defensive logging
+            self.logger.warning("Failed to update reviewer context: %s", err)
 
     # ========================================================================
     # NEW: MULTI-STAGE WIZARD FLOW METHODS
@@ -1854,24 +2137,77 @@ class MasterOrchestrator:
         
         This is where we call Architecture Agent, Cost Agent, and Documentation Agent.
         """
-        self.logger.info("All stages approved - generating full architecture")
+        workflow_start = time.time()
+        self.logger.info("All stages approved - generating full architecture for session %s", session_id)
         
-        # TODO: Reconstruct requirements from all stage decisions
-        # TODO: Call Architecture, Cost, Documentation agents
-        # TODO: Return complete OrchestratorOutput with SUCCESS status
+        initial_request = session_data.get("initial_request")
+        if not initial_request:
+            raise ValueError("Session data missing initial_request; cannot finalize workflow")
         
-        # Placeholder for now
+        stage_context = {
+            "stage_answers": session_data.get("previous_answers", {}),
+            "stage_decisions": session_data.get("all_stage_decisions", {}),
+            "stages_completed": session_data.get("stages_completed", []),
+            "modification_history": session_data.get("modification_history", []),
+        }
+        if session_data.get("requirements"):
+            stage_context["stage_requirements_snapshot"] = session_data.get("requirements")
+        
+        requirements_output = await self._execute_requirements_stage(initial_request, stage_context)
+        requirements_output.source_user_input = initial_request
+        
+        architecture_output = await self._execute_architecture_stage(requirements_output)
+        cost_output = await self._execute_cost_stage(requirements_output, architecture_output)
+        documentation_output = await self._execute_documentation_stage(
+            requirements_output,
+            architecture_output,
+            cost_output
+        )
+        
+        workflow_duration = time.time() - workflow_start
+        self._finalize_workflow_metadata(workflow_duration, WorkflowStatus.SUCCESS)
+        unique_citations = self._deduplicate_citations(self.all_citations)
+        
+        completed_stages_raw = session_data.get("stages_completed", [])
+        stages_completed = [
+            stage.value if hasattr(stage, "value") else stage
+            for stage in completed_stages_raw
+        ]
+        
         return OrchestratorOutput(
             status=WorkflowStatus.SUCCESS,
             conversation_stage=ConversationStage.COMPLETE,
-            citations=[],
+            requirements=requirements_output.model_dump(),
+            architecture=architecture_output.model_dump(),
+            costs=cost_output.model_dump(),
+            documentation=documentation_output.model_dump(),
+            citations=unique_citations,
             workflow_metadata=WorkflowMetadata(
-                stages_completed=["all_stages_approved"],
-                total_duration_seconds=0,
-                agents_invoked=[],
-                start_time=datetime.utcnow(),
-                end_time=datetime.utcnow()
-            )
+                stages_completed=stages_completed + ["architecture", "cost", "documentation"],
+                total_duration_seconds=workflow_duration,
+                agents_invoked=[
+                    "RequirementsAgent",
+                    "ArchitectureAgent",
+                    "CostAgent",
+                    "DocumentationAgent",
+                ],
+                start_time=datetime.fromtimestamp(workflow_start),
+                end_time=datetime.utcnow(),
+                clarification_rounds=self.workflow_metadata.get("clarification_rounds", 0),
+                requirements_diff=self.workflow_metadata.get("requirements_diff"),
+                reviewer_context=self.workflow_metadata.get("reviewer_context"),
+                architecture_validation_warnings=self.workflow_metadata.get(
+                    "architecture_validation_warnings", []
+                ),
+            ),
+            stages_completed=stages_completed,
+            all_stage_decisions=session_data.get("all_stage_decisions", {}),
+            session_id=session_id,
+            awaiting_response=False,
+            can_go_back=False,
+            architecture_validation_warnings=self.workflow_metadata.get(
+                "architecture_validation_warnings", []
+            ),
         )
 
     async def _go_back_to_previous_stage(

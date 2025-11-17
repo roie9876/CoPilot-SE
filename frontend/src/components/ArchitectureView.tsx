@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
 import { Server, Package, DollarSign, AlertCircle, Save, Download } from 'lucide-react';
 import type { ArchitectureOutput, CostOutput, DocumentationOutput } from '../types';
+import { ValidationWarningsBanner } from './ValidationWarningsBanner';
 
 interface ArchitectureViewProps {
   architecture: ArchitectureOutput;
   costs?: CostOutput;
   documentation?: DocumentationOutput;
+  validationWarnings?: string[];
 }
 
 // Initialize mermaid
@@ -17,8 +19,11 @@ mermaid.initialize({
   flowchart: { curve: 'basis' }
 });
 
-export default function ArchitectureView({ architecture, costs, documentation }: ArchitectureViewProps) {
+export default function ArchitectureView({ architecture, costs, documentation, validationWarnings }: ArchitectureViewProps) {
   const diagramRef = useRef<HTMLDivElement>(null);
+  const warningsToDisplay = validationWarnings?.length
+    ? validationWarnings
+    : architecture.validation_warnings || [];
 
   // Debug: Log received props
   useEffect(() => {
@@ -199,6 +204,8 @@ export default function ArchitectureView({ architecture, costs, documentation }:
         </button>
       </div>
 
+      <ValidationWarningsBanner warnings={warningsToDisplay} />
+
       {/* Logical Diagram */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <div className="flex items-center space-x-2 mb-4">
@@ -293,7 +300,7 @@ export default function ArchitectureView({ architecture, costs, documentation }:
           <div className="space-y-3">
             {Object.entries(architecture.design_rationale).map(([pillar, description]) => (
               <div key={pillar} className="flex items-start space-x-3">
-                <div className="flex-shrink-0 px-2 py-1 rounded bg-blue-100 dark:bg-blue-900">
+                <div className="shrink-0 px-2 py-1 rounded bg-blue-100 dark:bg-blue-900">
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-300 uppercase">
                     {pillar.replace('_', ' ')}
                   </span>

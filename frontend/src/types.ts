@@ -13,10 +13,10 @@ export interface RequirementsOutput {
   industry_vertical: string;
   functional_requirements: string[];
   non_functional_requirements: {
-    scalability: Record<string, any>;
-    performance: Record<string, any>;
-    availability: Record<string, any>;
-    security: Record<string, any>;
+    scalability: Record<string, unknown>;
+    performance: Record<string, unknown>;
+    availability: Record<string, unknown>;
+    security: Record<string, unknown>;
     compliance: string[];
   };
   technical_constraints: {
@@ -49,8 +49,8 @@ export interface ServiceSelection {
     instance_type?: string;
     replicas: number;
     storage_gb?: number;
-    auto_scaling?: Record<string, any>;
-    additional_settings: Record<string, any>;
+    auto_scaling?: Record<string, unknown>;
+    additional_settings: Record<string, unknown>;
   };
   alternatives: string[];
   estimated_monthly_cost: number;
@@ -80,6 +80,7 @@ export interface ArchitectureOutput {
   trade_offs: string[];
   technology_stack: string[];
   citations: Citation[];
+  validation_warnings?: string[];
 }
 
 export interface ServiceCost {
@@ -89,10 +90,10 @@ export interface ServiceCost {
   low_usage_monthly: number;
   medium_usage_monthly: number;
   high_usage_monthly: number;
-  assumptions: Record<string, any>;
+  assumptions: Record<string, unknown>;
   pricing_tier: string;
   pricing_url: string;
-  cost_breakdown: Record<string, any>;
+  cost_breakdown: Record<string, unknown>;
 }
 
 export interface CostOutput {
@@ -151,6 +152,10 @@ export interface WorkflowMetadata {
   agents_invoked: string[];
   start_time: string;
   end_time: string;
+  clarification_rounds?: number;
+  requirements_diff?: Record<string, unknown> | null;
+  reviewer_context?: Record<string, unknown> | null;
+  architecture_validation_warnings?: string[];
 }
 
 // Multi-stage wizard types
@@ -204,6 +209,7 @@ export interface OrchestratorOutput {
   documentation?: DocumentationOutput;
   citations: Citation[];
   workflow_metadata: WorkflowMetadata;
+  architecture_validation_warnings?: string[];
   // Interactive clarification fields
   clarifying_questions?: ClarificationQuestion[];
   chain_of_thought?: string;

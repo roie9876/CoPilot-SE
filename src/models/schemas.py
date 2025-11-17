@@ -5,7 +5,7 @@ Based on: .copilot/api-schemas.md
 """
 
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Literal
+from typing import Any, List, Optional, Dict, Literal
 from datetime import datetime
 from enum import Enum
 import re
@@ -121,6 +121,23 @@ class WorkflowMetadata(BaseModel):
     agents_invoked: List[str] = Field(default_factory=list)
     start_time: datetime
     end_time: Optional[datetime] = None
+    clarification_rounds: int = Field(
+        0,
+        ge=0,
+        description="How many clarification cycles occurred before completion"
+    )
+    requirements_diff: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Summary of differences between requirement revisions"
+    )
+    reviewer_context: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Pre-computed context blob for downstream reviewer agents"
+    )
+    architecture_validation_warnings: List[str] = Field(
+        default_factory=list,
+        description="Warnings generated while normalizing LLM-selected Azure services"
+    )
 
 
 class AgentError(BaseModel):
@@ -238,6 +255,10 @@ class OrchestratorOutput(BaseModel):
     # Metadata
     citations: List[Citation] = Field(default_factory=list)
     workflow_metadata: WorkflowMetadata
+    architecture_validation_warnings: List[str] = Field(
+        default_factory=list,
+        description="Non-blocking validation messages surfaced by the Architecture Agent"
+    )
     
     # ===== LEGACY SINGLE-ROUND CLARIFICATION (backwards compatible) =====
     # Interactive clarification (if status == NEEDS_CLARIFICATION)
@@ -372,6 +393,15 @@ class RequirementsOutput(BaseModel):
     )
     extraction_method: str = "gpt-5-cot"  # Chain of thought
     citations: List['Citation'] = Field(default_factory=list, description="Sources used")
+    source_user_input: Optional[str] = Field(
+        None,
+        description="Original natural language request for traceability"
+    )
+    clarification_round: int = Field(
+        0,
+        ge=0,
+        description="Clarification round that produced this requirements snapshot"
+    )
     
     class Config:
         use_enum_values = True
@@ -445,6 +475,11 @@ class ArchitectureInput(BaseModel):
         example="eastus"
     )
     
+    workflow_context: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata for architecture prompts (clarification rounds, requirement diffs, reviewer context, etc.)"
+    )
+    
     @validator('target_cloud', pre=True)
     def validate_cloud(cls, v):
         """Validate and normalize cloud platform."""
@@ -497,6 +532,10 @@ class ArchitectureOutput(BaseModel):
     citations: List[Citation] = Field(
         default_factory=list,
         description="Sources used (official docs, community)"
+    )
+    validation_warnings: List[str] = Field(
+        default_factory=list,
+        description="Non-blocking issues detected when validating the generated architecture"
     )
     
     class Config:

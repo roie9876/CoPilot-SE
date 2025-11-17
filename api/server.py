@@ -210,6 +210,8 @@ async def generate_architecture(request: GenerateRequest):
                 sessions[result.session_id] = {
                     "partial_requirements": result.requirements,
                     "created_at": str(result.workflow_metadata.start_time),
+                    "clarification_round": result.requirements.get("clarification_round", 1),
+                    "user_input": request.requirements,
                 }
 
         # Check for errors
@@ -266,6 +268,12 @@ async def submit_clarification(request: ClarificationRequest):
             clarification_answers=request.answers,
             partial_requirements=session_data["partial_requirements"],
         )
+
+        # Persist updated requirements if additional clarification is needed
+        if result.status == "needs_clarification":
+            session_data["partial_requirements"] = result.requirements
+            session_data["clarification_round"] = result.requirements.get("clarification_round")
+            return result
 
         # Clean up session after successful completion
         if result.status == "success":

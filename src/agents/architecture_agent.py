@@ -1,19 +1,19 @@
 """
-Architecture Agent - Designs multi-cloud architectures.
+Architecture Agent - Designs Microsoft Azure architectures only.
 
 This agent:
-1. Analyzes requirements and selects appropriate cloud services
-2. Applies cloud best practices and well-architected frameworks
+1. Analyzes requirements and selects appropriate Azure services
+2. Applies Azure Well-Architected Framework guidance and Microsoft best practices
 3. Generates architecture diagrams (Mermaid syntax)
-4. Provides design rationale and trade-offs
-5. Considers security, scalability, and cost optimization
-
-REFACTORED: Now uses Agent Framework SDK with ChatAgent + Bing grounding
+4. Provides design rationale, trade-offs, and deployment considerations
+5. Uses Microsoft Agent Framework SDK with ChatAgent + Bing grounding for research
 """
 
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 import logging
 import json
+import re
+from difflib import get_close_matches
 
 if TYPE_CHECKING:
     from src.models.knowledge_graph import KnowledgeGraph
@@ -39,14 +39,13 @@ logger = logging.getLogger(__name__)
 
 class ArchitectureAgent:
     """
-    Multi-cloud architecture design agent using Agent Framework SDK.
+    Azure-only architecture design agent using Microsoft Agent Framework + Bing Grounding.
     
-    Uses ChatAgent with Bing grounding to:
-    - Research latest cloud services and best practices
-    - Select appropriate services for requirements
-    - Apply well-architected framework principles
-    - Generate architecture diagrams
-    - Provide citations from official documentation
+    Responsibilities:
+    - Research Azure services/SKUs with Bing citations
+    - Select Azure services aligned with curated catalog and requirements
+    - Apply Azure Well-Architected Framework principles
+    - Generate valid Mermaid diagrams plus deployment considerations and citations
     """
     
     # Azure service catalog by category
@@ -192,14 +191,126 @@ class ArchitectureAgent:
             }
         }
     }
+
+    ADDITIONAL_AZURE_SERVICES = {
+        "Azure API Management",
+        "Azure Service Bus",
+        "Azure Event Grid",
+        "Azure Storage Account",
+        "Azure Firewall",
+        "Azure Bastion",
+        "Azure Site Recovery",
+        "Azure Backup",
+        "Azure Virtual Network",
+        "Azure ExpressRoute",
+        "Microsoft Defender for Cloud",
+        "Microsoft Entra External ID",
+    }
+
+    SERVICE_NAME_ALIASES = {
+        "azure ad": "Azure Active Directory (Entra ID)",
+        "aad": "Azure Active Directory (Entra ID)",
+        "entra id": "Azure Active Directory (Entra ID)",
+        "azure active directory": "Azure Active Directory (Entra ID)",
+        "keyvault": "Azure Key Vault",
+        "azure keyvault": "Azure Key Vault",
+        "azure monitor (application insights)": "Azure Monitor",
+    }
     
     def __init__(self):
         """Initialize Architecture Agent with Agent Framework and Bing."""
         self.logger = logging.getLogger(__name__)
         self.client = AgentFrameworkClient()
+        self.service_catalog_json = json.dumps(self.AZURE_SERVICES, indent=2)
+        self.allowed_service_names = self._build_allowed_service_names()
+        self.allowed_service_lookup = {
+            name.lower(): name for name in self.allowed_service_names
+        }
         
         # Initialize instructions and create agent
         self._init_instructions()
+
+    def _build_allowed_service_names(self) -> set:
+        """Create lookup set of Azure service names for validation."""
+        names = set(self.ADDITIONAL_AZURE_SERVICES)
+        for service_map in self.AZURE_SERVICES.values():
+            names.update(service_map.keys())
+        return names
+
+    def _normalize_service_name(self, service_name: str) -> Tuple[str, bool, Optional[str]]:
+        """Normalize a service name to the canonical Azure name if possible."""
+        if not service_name:
+            return "Unknown Service", False, "Missing service name"
+
+        normalized = re.sub(r"\s+", " ", service_name).strip()
+        lowered = normalized.lower()
+
+        if lowered in self.SERVICE_NAME_ALIASES:
+            canonical = self.SERVICE_NAME_ALIASES[lowered]
+            return canonical, True, f"Mapped alias '{normalized}' to '{canonical}'"
+
+        if lowered in self.allowed_service_lookup:
+            canonical = self.allowed_service_lookup[lowered]
+            return canonical, True, None
+
+        close_match = get_close_matches(
+            lowered, list(self.allowed_service_lookup.keys()), n=1, cutoff=0.9
+        )
+        if close_match:
+            canonical = self.allowed_service_lookup[close_match[0]]
+            return canonical, True, f"Auto-corrected '{normalized}' to '{canonical}'"
+
+        return normalized, False, None
+
+    def _enforce_allowed_services(
+        self, services: List[ServiceSelection]
+    ) -> Tuple[List[ServiceSelection], List[str]]:
+        """Ensure only approved Azure services are returned, with normalization."""
+        validated: List[ServiceSelection] = []
+        warnings: List[str] = []
+        seen_names = set()
+
+        for svc in services:
+            original_name = svc.service_name or "Unknown Service"
+            canonical, matched, note = self._normalize_service_name(original_name)
+
+            if matched:
+                svc.service_name = canonical
+                if svc.configuration is None:
+                    svc.configuration = ServiceConfiguration()
+                if note:
+                    svc.configuration.additional_settings.setdefault(
+                        "validation_notes", []
+                    ).append(note)
+                if canonical in seen_names:
+                    warnings.append(
+                        f"Removed duplicate service '{canonical}' from agent output."
+                    )
+                    continue
+                seen_names.add(canonical)
+                validated.append(svc)
+            else:
+                warnings.append(
+                    f"Removed unsupported or non-Azure service '{original_name}'."
+                )
+
+        if not validated:
+            fallback_services = self._add_foundational_services()
+            warnings.append(
+                "No valid Azure services remained after validation; inserted "
+                "foundational security and monitoring services."
+            )
+            for svc in fallback_services:
+                if svc.service_name not in seen_names:
+                    seen_names.add(svc.service_name)
+                    validated.append(svc)
+
+        if warnings:
+            self.logger.warning(
+                "Service validation detected issues: %s", "; ".join(warnings)
+            )
+
+        return validated, warnings
     
     def _parse_time_value(self, value) -> int:
         """
@@ -237,8 +348,8 @@ class ArchitectureAgent:
             return None
     
     def _init_instructions(self):
-        """Initialize system instructions for multi-cloud architecture design."""
-        # System instructions for multi-cloud architecture design
+        """Initialize system instructions for Azure-only architecture design."""
+        # Legacy multi-cloud instructions retained for reference (overridden below)
         self.instructions = """You are a Multi-Cloud Architecture Design Agent with expertise in AWS, Azure, GCP, and Oracle Cloud.
 
 Your task is to design cloud architectures based on customer requirements.
@@ -363,13 +474,172 @@ Your task is to design cloud architectures based on customer requirements.
 ```
 
 Search for official documentation and provide accurate citations."""
-        
+
+        # Override legacy prompt with Azure-only instructions aligned to CoPilot-SE scope
+        self.instructions = self._build_azure_instruction_block()
+
         # Create agent with Bing grounding enabled
         self.agent = self.client.create_agent(
             name="ArchitectureAgent",
             instructions=self.instructions,
             enable_bing=True  # Enable web search for latest documentation
         )
+
+    def _build_azure_instruction_block(self) -> str:
+        """Construct Azure-specific system instructions for the ChatAgent."""
+        allowed_services = "\n".join(
+            f"- {name}" for name in sorted(self.allowed_service_names)
+        )
+        workflow_context_guidance = (
+            "- clarification_round: 0, 1, 2... indicates how many clarification loops occurred.\n"
+            "- diff_from_previous: Highlights what changed versus the last architecture pass; must be addressed.\n"
+            "- reviewer_context: Name/role of the reviewer to tailor tone and detail depth.\n"
+            "- original_user_request: Raw user ask for grounding.\n"
+            "- requirements_understanding: Summaries from upstream agents that you must honor.\n"
+            "- previous_decisions: Locked-in choices that should not be contradicted.\n"
+            "- known_ambiguities: Outstanding questions you should flag with mitigation guidance."
+        )
+        output_contract = (
+            "{\n"
+            '  "services": [\n'
+            "    {\n"
+            '      "name": "Azure service name",\n'
+            '      "category": "compute|storage|database|networking|security|monitoring",\n'
+            '      "purpose": "What this service does in the solution",\n'
+            '      "sku": "Exact SKU / plan (e.g., P1v2, GP_Gen5_2)",\n'
+            '      "configuration": {\n'
+            '        "sku": "Exact SKU",\n'
+            '        "instance_type": "VM size or plan",\n'
+            '        "replicas": 2,\n'
+            '        "storage_gb": 128,\n'
+            '        "auto_scaling": {"enabled": true, "min": 2, "max": 10},\n'
+            '        "additional_settings": {"key": "value"}\n'
+            "      },\n"
+            '      "alternatives": ["Option 1", "Option 2"],\n'
+            '      "rationale": "Why this service/skus best fit"\n'
+            "    }\n"
+            "  ],\n"
+            '  "architecture_diagram": "```mermaid\\ngraph TD\\n    Users[Users]\\n    Edge[Azure Front Door]\\n    App[Azure App Service]\\n    DB[Azure SQL Database]\\n    Users --> Edge\\n    Edge --> App\\n    App --> DB\\n```",\n'
+            '  "well_architected_analysis": {\n'
+            '    "security": ["measure"],\n'
+            '    "reliability": ["measure"],\n'
+            '    "performance": ["measure"],\n'
+            '    "cost_optimization": ["measure"],\n'
+            '    "operational_excellence": ["measure"]\n'
+            "  },\n"
+            '  "deployment_considerations": {\n'
+            '    "iac_tool": "Bicep|Terraform",\n'
+            '    "cicd_pipeline": "GitHub Actions workflow",\n'
+            '    "monitoring_strategy": "Application Insights + Log Analytics",\n'
+            '    "backup_strategy": "Azure Backup / Geo-redundant storage"\n'
+            "  },\n"
+            '  "trade_offs": ["Trade-off summary"],\n'
+            '  "technology_stack": {\n'
+            '    "backend": ["Python"],\n'
+            '    "frontend": ["React"],\n'
+            '    "infrastructure": ["Bicep"]\n'
+            "  },\n"
+            '  "citations": [\n'
+            '    {"title": "Doc title", "url": "https://learn.microsoft.com/...", "relevance": "What this citation proves"}\n'
+            "  ]\n"
+            "}"
+        )
+        instructions = [
+            "You are the CoPilot-SE Architecture Agent for a 10-user Azure-only POC. "
+            "Never recommend AWS, GCP, or on-prem services.",
+            "", 
+            "## Inputs you receive", 
+            "- Structured requirements (functional, non-functional, technical constraints, implied).",
+            "- Region preference (default to eastus if unspecified).",
+            "- workflow_context metadata:",
+            workflow_context_guidance,
+            "", 
+            "## Responsibilities", 
+            "1. Validate requirements and call out gaps using workflow_context.",
+            "2. Select Azure services strictly from the curated catalog or allowed list.",
+            "3. Map each decision to Azure Well-Architected pillars.",
+            "4. Produce a valid Mermaid diagram (graph TD or LR, one node per line, "
+            "no chained statements).",
+            "5. Provide deployment considerations (IaC, CI/CD, monitoring, backup).",
+            "6. ALWAYS cite official Microsoft/Bing-sourced documentation for every unique service.",
+            "", 
+            "## Approved Azure services (normalized)",
+            allowed_services,
+            "", 
+            "### Curated Azure service catalog (JSON) — use this as source of truth", 
+            "```json",
+            self.service_catalog_json,
+            "```",
+            "- If a requirement references an alias (e.g., 'AAD'), map it using SERVICE_NAME_ALIASES.",
+            "- If a service is missing from the catalog, justify the choice and cite official docs.",
+            "", 
+            "## Workflow-aware guidance", 
+            "- Respond to diff_from_previous by explicitly noting what changed.",
+            "- If reviewer_context indicates 'executive', keep prose concise; if 'domain SME', "
+            "deepen technical depth.",
+            "- Highlight known_ambiguities in the trade_offs or dedicated callouts.",
+            "", 
+            "## Diagram expectations",
+            "- Use graph TD unless horizontal layout is clearer.",
+            "- Node IDs: letters/numbers only (AppService, SqlDB).",
+            "- Display text can include spaces (Azure App Service).",
+            "- Every edge on its own line; label arrows with `-->|Label|` syntax when needed.",
+            "", 
+            "## Output JSON contract (strict)",
+            "```json",
+            output_contract,
+            "```",
+            "", 
+            "## Bing + citation policy",
+            "- Use HostedWebSearch/Bing for every service/SKU recommendation to confirm latest "
+            "features, region availability, and pricing tiers.",
+            "- Provide >= 1 citation URL per service group; cite Microsoft Learn or Azure updates when possible.",
+            "- Never fabricate URLs; prefer https://learn.microsoft.com/.",
+            "", 
+            "## Guardrails",
+            "- Always include Azure Key Vault, Entra ID, and Azure Monitor unless explicitly out of scope.",
+            "- Respect technical constraints (e.g., budget, team skills) when choosing SKUs.",
+            "- Explain cost/performance trade-offs and recommend right-sizing/auto-scaling settings.",
+            "- Call out DR targets (RPO/RTO) and map to Azure Backup/Site Recovery when applicable.",
+        ]
+        return "\n".join(instructions)
+
+    def _format_workflow_context(self, workflow_context: Optional[Dict[str, Any]]) -> str:
+        """Format workflow context metadata for inclusion in the LLM prompt."""
+        if not workflow_context:
+            return "- No prior workflow context provided."
+        lines = []
+        if workflow_context.get("clarification_round") is not None:
+            lines.append(
+                f"- Clarification round: {workflow_context.get('clarification_round')}"
+            )
+        if workflow_context.get("diff_from_previous"):
+            lines.append(
+                f"- Requirement deltas: {workflow_context['diff_from_previous']}"
+            )
+        if workflow_context.get("reviewer_context"):
+            lines.append(
+                f"- Reviewer context: {workflow_context['reviewer_context']}"
+            )
+        if workflow_context.get("requirements_understanding"):
+            lines.append(
+                f"- Prior understanding: {workflow_context['requirements_understanding']}"
+            )
+        if workflow_context.get("previous_decisions"):
+            lines.append(
+                f"- Locked decisions: {workflow_context['previous_decisions']}"
+            )
+        if workflow_context.get("known_ambiguities"):
+            lines.append(
+                f"- Outstanding ambiguities: {workflow_context['known_ambiguities']}"
+            )
+        if workflow_context.get("original_user_request"):
+            lines.append(
+                f"- Original request: {workflow_context['original_user_request']}"
+            )
+        if not lines:
+            lines.append("- Workflow context provided but no recognized fields were set.")
+        return "\n".join(lines)
     
     async def process(self, input_data: Dict) -> Dict:
         """
@@ -387,6 +657,12 @@ Search for official documentation and provide accurate citations."""
             
             self.logger.info(
                 f"Designing {arch_input.target_cloud} architecture for region: {arch_input.region}"
+            )
+            workflow_context_text = self._format_workflow_context(
+                getattr(arch_input, "workflow_context", None)
+            )
+            allowed_services_summary = ", ".join(
+                sorted(self.allowed_service_names)
             )
             
             # Build comprehensive prompt
@@ -410,6 +686,17 @@ Search for official documentation and provide accurate citations."""
 - Budget: {req.technical_constraints.budget}
 - Team Skills: {req.technical_constraints.team_skills}
 - Timeline: {req.technical_constraints.timeline}
+
+**Workflow Context:**
+{workflow_context_text}
+
+**Service Guardrails:**
+- Use only Azure services from the curated catalog or this normalized list.
+- If a requirement mentions an alias (AAD, KeyVault, etc.), map it to the canonical Azure service name.
+- Every recommended service/SKU must cite official Microsoft documentation sourced via Bing.
+
+**Allowed Azure Services (normalized):**
+{allowed_services_summary}
 
 **Implied Requirements:**
 {chr(10).join(f"- {r}" for r in req.implied_requirements)}
@@ -455,6 +742,11 @@ Design a complete architecture and provide the JSON response with all sections f
             self.logger.info(
                 f"Architecture designed: {len(output.services)} services selected"
             )
+            if output.validation_warnings:
+                self.logger.warning(
+                    "Architecture validation warnings: %s",
+                    "; ".join(output.validation_warnings)
+                )
             
             return output
         
@@ -545,6 +837,8 @@ Design a complete architecture and provide the JSON response with all sections f
             )
             
             services.append(svc)
+
+        services, validation_warnings = self._enforce_allowed_services(services)
         
         # Validate and potentially regenerate architecture diagram
         llm_diagram = arch_data.get("architecture_diagram", "")
@@ -559,6 +853,7 @@ Design a complete architecture and provide the JSON response with all sections f
         )
         
         output.services = services
+        output.validation_warnings = validation_warnings
         
         # Deployment considerations
         output.deployment_considerations = arch_data.get("deployment_considerations", {})

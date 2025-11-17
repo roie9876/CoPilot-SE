@@ -3,6 +3,7 @@ import { StageProgress } from './StageProgress';
 import { StageApproval } from './StageApproval';
 import type { StageOutput } from '../types';
 import './Stage2View.css';
+import { ValidationWarningsBanner } from './ValidationWarningsBanner';
 
 interface Stage2ViewProps {
   stageOutput: StageOutput;
@@ -13,6 +14,7 @@ interface Stage2ViewProps {
   onBack?: () => void;
   onSeeAlternatives?: () => void;
   isLoading: boolean;
+  validationWarnings?: string[];
 }
 
 export const Stage2View: React.FC<Stage2ViewProps> = ({
@@ -23,6 +25,7 @@ export const Stage2View: React.FC<Stage2ViewProps> = ({
   onBack,
   onSeeAlternatives,
   isLoading,
+  validationWarnings,
 }) => {
   const [showReasoning, setShowReasoning] = React.useState(false);
   const [selectedOptions, setSelectedOptions] = React.useState<Record<string, string>>({});
@@ -62,6 +65,8 @@ export const Stage2View: React.FC<Stage2ViewProps> = ({
           </div>
         )}
       </div>
+
+      <ValidationWarningsBanner warnings={validationWarnings} />
 
       {stageOutput.chain_of_thought && (
         <div className="chain-of-thought-section">
