@@ -85,6 +85,66 @@ class ArchitectureAgent:
                 "sku_options": ["B-series (Burstable)", "D-series (General)", "E-series (Memory)"],
                 "features": ["Multiple OS choices", "Hybrid benefit", "Reserved instances"],
                 "managed_identity": True
+            },
+            "Azure Container Apps": {
+                "use_case": "Serverless containers for microservices",
+                "best_for": ["microservices", "containers", "dapr", "keda", "http apis"],
+                "sku_options": ["Consumption", "Dedicated"],
+                "features": ["Dapr integration", "KEDA auto-scaling", "Revision management"],
+                "managed_identity": True
+            },
+            "Azure Spring Apps": {
+                "use_case": "Managed Spring Boot deployments",
+                "best_for": ["spring", "java", "microservices"],
+                "sku_options": ["Basic", "Standard", "Enterprise"],
+                "features": ["Managed Tanzu components", "Zero-downtime deployments", "Integrated monitoring"],
+                "managed_identity": True
+            },
+            "Azure Virtual Machine Scale Sets": {
+                "use_case": "Autoscaling virtual machines",
+                "best_for": ["auto scaling", "vm", "compute farms"],
+                "sku_options": ["Uniform", "Flexible"],
+                "features": ["Auto-heal", "Multiple zones", "Custom images"],
+                "managed_identity": True
+            },
+            "Azure Batch": {
+                "use_case": "High-performance batch compute",
+                "best_for": ["rendering", "hpc", "parallel jobs"],
+                "sku_options": ["Pay-as-you-go"],
+                "features": ["Job scheduling", "Auto-scaling pools", "Spot VM support"],
+                "managed_identity": True
+            }
+        },
+        "ai": {
+            "Azure OpenAI Service": {
+                "use_case": "GPT-powered generative AI (chat, summarization, copilots)",
+                "best_for": ["llm", "openai", "gpt", "summarization", "chatbots", "ai agents"],
+                "features": ["Model catalog", "Content filters", "Responsible AI controls"],
+                "managed_identity": True
+            },
+            "Azure AI Foundry": {
+                "use_case": "Workspace to build, evaluate, and govern Azure OpenAI applications",
+                "best_for": ["prompt flow", "agent orchestration", "model evaluation"],
+                "features": ["Prompt Flow", "Agent Builder", "Model catalog", "Deployment governance"],
+                "managed_identity": True
+            },
+            "Azure AI Document Intelligence": {
+                "use_case": "Document ingestion, OCR, and structured extraction for PDFs/Word",
+                "best_for": ["ocr", "document processing", "pdf", "forms"],
+                "features": ["Layout extraction", "Custom models", "Prebuilt templates"],
+                "managed_identity": True
+            },
+            "Azure AI Search": {
+                "use_case": "Enterprise search with semantic and vector capabilities",
+                "best_for": ["search", "vector search", "semantic search", "knowledge base"],
+                "features": ["Cognitive skills", "Vector embeddings", "Synonym maps"],
+                "managed_identity": True
+            },
+            "Azure Machine Learning": {
+                "use_case": "End-to-end ML platform for training and deployment",
+                "best_for": ["mlops", "model training", "custom ml", "automl"],
+                "features": ["Managed compute", "Model registry", "Pipelines", "Responsible AI"],
+                "managed_identity": True
             }
         },
         "storage": {
@@ -106,6 +166,19 @@ class ArchitectureAgent:
                 "use_case": "Message queue for async processing",
                 "best_for": ["message queue", "async", "decoupling"],
                 "features": ["At-least-once delivery", "Large messages"],
+                "encryption": True
+            },
+            "Azure Data Lake Storage Gen2": {
+                "use_case": "Hierarchical namespace for analytics data lakes",
+                "best_for": ["data lake", "big data", "lakehouse", "parquet"],
+                "features": ["POSIX ACLs", "Hierarchical namespace", "Tiering"],
+                "encryption": True
+            },
+            "Azure NetApp Files": {
+                "use_case": "High-performance file shares for SAP/HPC",
+                "best_for": ["sap", "critical enterprise workloads", "nfs", "smb"],
+                "tiers": ["Standard", "Premium", "Ultra"],
+                "features": ["Snapshots", "Cross-region replication", "Low latency"],
                 "encryption": True
             }
         },
@@ -144,6 +217,65 @@ class ArchitectureAgent:
                 "tiers": ["Basic", "Standard", "Premium"],
                 "features": ["Clustering", "Persistence", "Geo-replication"],
                 "managed_identity": True
+            },
+            "Azure SQL Managed Instance": {
+                "use_case": "Managed SQL Server compatibility for lift-and-shift",
+                "best_for": ["sql server", "migration", "linked server"],
+                "tiers": ["General Purpose", "Business Critical"],
+                "features": ["Near 100% compatibility", "Auto patching", "Built-in HA"],
+                "managed_identity": True
+            }
+        },
+        "data": {
+            "Azure Data Factory": {
+                "use_case": "Data ingestion and orchestration",
+                "best_for": ["etl", "elt", "pipelines", "ingestion"],
+                "features": ["Managed integration runtime", "300+ connectors", "Mapping data flows"],
+                "managed_identity": True
+            },
+            "Azure Synapse Analytics": {
+                "use_case": "Unified data warehouse and analytics platform",
+                "best_for": ["data warehouse", "analytics", "lakehouse"],
+                "features": ["Serverless SQL", "Dedicated pools", "Spark", "Pipelines"],
+                "managed_identity": True
+            },
+            "Azure Databricks": {
+                "use_case": "Collaborative Apache Spark analytics",
+                "best_for": ["notebooks", "spark", "ml", "delta lake"],
+                "features": ["Managed workspace", "Photon engine", "Unity Catalog"],
+                "managed_identity": True
+            },
+            "Microsoft Purview": {
+                "use_case": "Data governance, catalog, and lineage",
+                "best_for": ["data catalog", "governance", "compliance", "lineage"],
+                "features": ["Automated scanning", "Lineage visualization", "Business glossary"],
+                "managed_identity": True
+            },
+            "Azure Data Explorer": {
+                "use_case": "Log and telemetry analytics",
+                "best_for": ["telemetry", "time-series", "iot analytics"],
+                "features": ["Kusto query language", "Hot cache", "Dashboards"],
+                "managed_identity": True
+            }
+        },
+        "streaming": {
+            "Azure Event Hubs": {
+                "use_case": "High-throughput event ingestion",
+                "best_for": ["telemetry", "kafka", "streaming", "iot"],
+                "features": ["Kafka endpoint", "Capture", "Geo-disaster recovery"],
+                "managed_identity": False
+            },
+            "Azure Stream Analytics": {
+                "use_case": "Real-time stream processing",
+                "best_for": ["real-time analytics", "complex event processing"],
+                "features": ["SQL-like queries", "Built-in ML", "Outputs to Power BI"],
+                "managed_identity": True
+            },
+            "Azure IoT Hub": {
+                "use_case": "Bi-directional communication with IoT devices",
+                "best_for": ["iot", "device management", "telemetry"],
+                "features": ["Device twins", "IoT Edge", "Automatic device provisioning"],
+                "managed_identity": True
             }
         },
         "networking": {
@@ -165,6 +297,31 @@ class ArchitectureAgent:
                 "tiers": ["Basic", "Standard"],
                 "features": ["Health probes", "Outbound rules"],
                 "security": False
+            },
+            "Azure Virtual Network": {
+                "use_case": "Isolated network boundary for Azure resources",
+                "best_for": ["network isolation", "private endpoints", "vpn"],
+                "features": ["Subnets", "NSG", "Private Link", "VPN gateway"],
+                "security": True
+            },
+            "Azure Firewall": {
+                "use_case": "Stateful firewall-as-a-service for east-west and north-south traffic",
+                "best_for": ["zero trust", "network isolation", "egress control"],
+                "features": ["Threat intelligence", "DNAT/SNAT", "Application rules"],
+                "security": True
+            },
+            "Azure DDoS Protection": {
+                "use_case": "Network layer DDoS protection",
+                "best_for": ["public endpoints", "high traffic", "critical workloads"],
+                "tiers": ["Basic", "Standard"],
+                "features": ["Always-on monitoring", "Adaptive tuning", "Cost protection"],
+                "security": True
+            },
+            "Azure Bastion": {
+                "use_case": "Browser-based RDP/SSH over private IPs",
+                "best_for": ["jumpbox", "secure administration", "private management"],
+                "features": ["No public IP", "SSO with Entra ID", "Session logging"],
+                "security": True
             }
         },
         "security": {
@@ -180,6 +337,18 @@ class ArchitectureAgent:
                 "best_for": ["authentication", "authorization", "sso"],
                 "features": ["SSO", "MFA", "Conditional access"],
                 "required": True  # Always recommended
+            },
+            "Microsoft Defender for Cloud": {
+                "use_case": "Cloud security posture management and workload protection",
+                "best_for": ["cspm", "threat detection", "regulatory compliance"],
+                "features": ["Regulatory compliance dashboard", "Defender plans", "Workload hardening"],
+                "required": False
+            },
+            "Microsoft Sentinel": {
+                "use_case": "SIEM/SOAR for threat detection and response",
+                "best_for": ["siem", "soar", "security operations"],
+                "features": ["Analytics rules", "Automation playbooks", "Threat intelligence"],
+                "required": False
             }
         },
         "monitoring": {
@@ -188,6 +357,67 @@ class ArchitectureAgent:
                 "best_for": ["monitoring", "logging", "metrics"],
                 "features": ["Application Insights", "Log Analytics", "Alerts"],
                 "required": True  # Always recommended
+            }
+        },
+        "management": {
+            "Azure App Configuration": {
+                "use_case": "Centralized configuration and feature flags",
+                "best_for": ["feature flags", "configuration", "multi-environment"],
+                "features": ["Feature management", "Labels", "Key vault references"],
+                "managed_identity": True
+            },
+            "Azure Policy": {
+                "use_case": "Governance and compliance enforcement",
+                "best_for": ["compliance", "governance", "guardrails"],
+                "features": ["Policy assignments", "Initiatives", "Drift detection"],
+                "managed_identity": False
+            },
+            "Azure Automation": {
+                "use_case": "Runbooks and update management",
+                "best_for": ["patching", "runbooks", "scheduled jobs"],
+                "features": ["Hybrid worker", "Graphic runbooks", "Inventory"],
+                "managed_identity": True
+            }
+        },
+        "integration": {
+            "Azure API Management": {
+                "use_case": "Managed API gateway with developer portal",
+                "best_for": ["public apis", "partner integration", "rate limiting"],
+                "features": ["Policies", "Developer portal", "Analytics", "OAuth2"],
+                "managed_identity": True
+            },
+            "Azure Service Bus": {
+                "use_case": "Enterprise messaging with queues and topics",
+                "best_for": ["async messaging", "queue", "topic", "integration"],
+                "tiers": ["Basic", "Standard", "Premium"],
+                "features": ["Sessions", "Dead-letter", "Geo-disaster recovery"],
+                "managed_identity": True
+            },
+            "Azure Event Grid": {
+                "use_case": "Serverless event routing",
+                "best_for": ["event-driven", "webhooks", "pub/sub"],
+                "features": ["Event filtering", "Retry", "Dead-letter"],
+                "managed_identity": False
+            },
+            "Azure Logic Apps": {
+                "use_case": "Low-code workflow automation",
+                "best_for": ["workflow", "automation", "integration", "system orchestration"],
+                "features": ["Built-in connector library", "Visual designer", "Run history"],
+                "managed_identity": True
+            }
+        },
+        "resiliency": {
+            "Azure Backup": {
+                "use_case": "Centralized backup for VMs, databases, and files",
+                "best_for": ["backup", "rpo", "long term retention"],
+                "features": ["Policy-based backups", "Vault", "Immutable storage"],
+                "managed_identity": False
+            },
+            "Azure Site Recovery": {
+                "use_case": "Disaster recovery orchestration across regions",
+                "best_for": ["dr", "active-passive", "rto"],
+                "features": ["Replication", "Runbooks", "Test failover"],
+                "managed_identity": False
             }
         }
     }
@@ -215,6 +445,14 @@ class ArchitectureAgent:
         "keyvault": "Azure Key Vault",
         "azure keyvault": "Azure Key Vault",
         "azure monitor (application insights)": "Azure Monitor",
+        "adls": "Azure Data Lake Storage Gen2",
+        "azure data lake storage": "Azure Data Lake Storage Gen2",
+        "data lake storage": "Azure Data Lake Storage Gen2",
+        "cognitive search": "Azure AI Search",
+        "azure cognitive search": "Azure AI Search",
+        "azure search": "Azure AI Search",
+        "purview": "Microsoft Purview",
+        "sentinel": "Microsoft Sentinel"
     }
     
     def __init__(self):
@@ -927,6 +1165,10 @@ Design a complete architecture and provide the JSON response with all sections f
         if compute_service:
             services.append(compute_service)
         
+        # AI/LLM services
+        ai_services = self._select_ai_services(requirements)
+        services.extend(ai_services)
+
         # Storage services
         storage_services = self._select_storage_services(requirements)
         services.extend(storage_services)
@@ -935,10 +1177,38 @@ Design a complete architecture and provide the JSON response with all sections f
         database_service = self._select_database_service(requirements)
         if database_service:
             services.append(database_service)
+
+        # Data platform and analytics services
+        data_services = self._select_data_platform_services(requirements)
+        services.extend(data_services)
+
+        # Streaming and IoT ingestion
+        streaming_services = self._select_streaming_services(requirements)
+        services.extend(streaming_services)
+
+        # Enterprise search / vector search
+        search_services = self._select_search_services(requirements)
+        services.extend(search_services)
         
         # Networking services
         networking_services = self._select_networking_services(requirements)
         services.extend(networking_services)
+
+        # Integration and messaging services
+        integration_services = self._select_integration_services(requirements)
+        services.extend(integration_services)
+
+        # Security hardening services
+        security_enhancements = self._select_security_enhancements(requirements)
+        services.extend(security_enhancements)
+
+        # Resiliency and DR
+        resiliency_services = self._select_resiliency_services(requirements)
+        services.extend(resiliency_services)
+
+        # Management and governance
+        management_services = self._select_management_services(requirements)
+        services.extend(management_services)
         
         # Caching if needed
         if self._needs_caching(requirements):
@@ -977,6 +1247,20 @@ Design a complete architecture and provide the JSON response with all sections f
                 ),
                 alternatives=["Custom auth implementation (NOT RECOMMENDED)"],
                 estimated_monthly_cost=0.0
+            ),
+            ServiceSelection(
+                category="networking",
+                service_name="Azure Virtual Network",
+                rationale="Provides private network boundary, subnets, and NSGs for isolating application tiers and enabling Private Link.",
+                configuration=ServiceConfiguration(
+                    additional_settings={
+                        "subnets": ["web", "app", "data"],
+                        "nsg_enabled": True,
+                        "private_endpoints": True
+                    }
+                ),
+                alternatives=["Flat public network (NOT RECOMMENDED)"],
+                estimated_monthly_cost=35.0
             ),
             ServiceSelection(
                 category="monitoring",
@@ -1055,6 +1339,132 @@ Design a complete architecture and provide the JSON response with all sections f
             alternatives=["Azure Functions", "Azure Virtual Machines"],
             estimated_monthly_cost=74.0  # S1 tier
         )
+
+    def _select_ai_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Select Azure AI services (OpenAI, AI Foundry, Document Intelligence) when needed."""
+        services: List[ServiceSelection] = []
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+        constraints = requirements.technical_constraints or TechnicalConstraints()
+        preferred_lower = [tech.lower() for tech in getattr(constraints, "preferred_technologies", [])]
+
+        ai_keywords = [
+            "azure openai",
+            "openai",
+            "gpt",
+            "llm",
+            "ai agent",
+            "generative",
+            "chatbot",
+            "copilot",
+        ]
+        doc_keywords = [
+            "pdf",
+            "docx",
+            "word document",
+            "document intelligence",
+            "form recognizer",
+            "ocr",
+        ]
+        ml_keywords = [
+            "machine learning",
+            "mlops",
+            "model training",
+            "custom model",
+            "notebook",
+            "retrain",
+            "computer vision model",
+        ]
+
+        prefers_openai = any(keyword in term for term in preferred_lower for keyword in ["openai", "gpt", "llm"])
+        needs_llm = prefers_openai or any(keyword in normalized_text for keyword in ai_keywords)
+        needs_doc_ai = any(keyword in normalized_text for keyword in doc_keywords)
+        needs_custom_ml = any(keyword in normalized_text for keyword in ml_keywords)
+
+        if needs_llm:
+            deployment_name = next(
+                (tech for tech in getattr(constraints, "preferred_technologies", []) if "gpt" in tech.lower()),
+                "gpt-4o-mini"
+            )
+
+            services.append(
+                ServiceSelection(
+                    category="ai",
+                    service_name="Azure OpenAI Service",
+                    rationale="Provides GPT-based summarization and copilots via managed Azure OpenAI deployments.",
+                    configuration=ServiceConfiguration(
+                        sku="Pay-as-you-go",
+                        additional_settings={
+                            "deployment_name": deployment_name,
+                            "content_filter": "standard",
+                            "responsible_ai_monitoring": True,
+                        }
+                    ),
+                    alternatives=["Azure AI Language", "Custom Hugging Face models on AKS"],
+                    estimated_monthly_cost=250.0,
+                )
+            )
+
+            services.append(
+                ServiceSelection(
+                    category="ai",
+                    service_name="Azure AI Foundry",
+                    rationale="Provides governance workspace (Prompt Flow, evaluations, agent builder) for Azure OpenAI apps.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "workspace_region": requirements.region or self._get_default_region(CloudPlatform.AZURE),
+                            "features": ["Prompt Flow", "Agent Builder", "Deployment governance"],
+                        }
+                    ),
+                    alternatives=["Custom DevOps pipelines without AI Foundry"],
+                    estimated_monthly_cost=50.0,
+                )
+            )
+
+        if needs_doc_ai:
+            services.append(
+                ServiceSelection(
+                    category="ai",
+                    service_name="Azure AI Document Intelligence",
+                    rationale="Automates ingestion/OCR of Word and PDF documents before passing summaries to Azure OpenAI.",
+                    configuration=ServiceConfiguration(
+                        sku="Standard",
+                        additional_settings={
+                            "storage_account": "Blob Storage (Hot tier)",
+                            "integration": "Connected to Azure OpenAI via AI Foundry pipelines",
+                        }
+                    ),
+                    alternatives=["Manual parsing", "Third-party OCR services"],
+                    estimated_monthly_cost=30.0,
+                )
+            )
+
+        if needs_custom_ml:
+            services.append(
+                ServiceSelection(
+                    category="ai",
+                    service_name="Azure Machine Learning",
+                    rationale="Provides managed compute, pipelines, and model registry for bespoke ML workloads beyond turnkey LLMs.",
+                    configuration=ServiceConfiguration(
+                        sku="Managed Online Endpoint",
+                        additional_settings={
+                            "workspace_compute": "Standard_DS3_v2",
+                            "enable_managed_identity": True,
+                        }
+                    ),
+                    alternatives=["Azure Databricks MLflow", "AKS-hosted models"],
+                    estimated_monthly_cost=180.0,
+                )
+            )
+
+        return services
     
     def _select_storage_services(
         self, requirements: RequirementsOutput
@@ -1158,6 +1568,264 @@ Design a complete architecture and provide the JSON response with all sections f
             estimated_monthly_cost=100.0
         )
     
+    def _select_data_platform_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Select data lake, ETL, analytics, and governance services."""
+        services: List[ServiceSelection] = []
+        added: set[str] = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+        constraints = requirements.technical_constraints or TechnicalConstraints()
+        existing_lower = [entry.lower() for entry in getattr(constraints, "existing_infrastructure", [])]
+
+        data_lake_keywords = ["data lake", "adls", "lakehouse", "raw zone", "delta lake", "parquet"]
+        pipeline_keywords = ["etl", "elt", "pipeline", "ingest", "data factory", "integration runtime"]
+        warehouse_keywords = ["data warehouse", "synapse", "analytics workspace", "fabric", "lakehouse"]
+        spark_keywords = ["spark", "databricks", "notebook", "ml pipeline", "delta"]
+        governance_keywords = ["catalog", "governance", "lineage", "data classification", "purview"]
+        telemetry_keywords = ["telemetry", "time-series", "iot analytics", "kusto", "adx"]
+
+        if any(keyword in normalized_text for keyword in data_lake_keywords):
+            _add(
+                ServiceSelection(
+                    category="storage",
+                    service_name="Azure Data Lake Storage Gen2",
+                    rationale="Hierarchical namespace storage for curated bronze/silver/gold zones required by analytics workloads.",
+                    configuration=ServiceConfiguration(
+                        storage_gb=500,
+                        additional_settings={
+                            "tier": "Hot",
+                            "redundancy": "ZRS" if self._needs_ha(requirements) else "LRS",
+                            "hierarchical_namespace": True,
+                        }
+                    ),
+                    alternatives=["Azure Blob Storage"],
+                    estimated_monthly_cost=75.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in pipeline_keywords) or "azure data factory" in existing_lower:
+            _add(
+                ServiceSelection(
+                    category="data",
+                    service_name="Azure Data Factory",
+                    rationale="Managed ETL/ELT service to orchestrate ingestion from SaaS/SQL sources into the data lake and warehouse.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "integration_runtime": "Auto-resolve",
+                            "trigger_types": ["schedule", "event"],
+                        }
+                    ),
+                    alternatives=["Synapse Pipelines", "Logic Apps"],
+                    estimated_monthly_cost=65.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in warehouse_keywords) or "synapse" in existing_lower:
+            _add(
+                ServiceSelection(
+                    category="data",
+                    service_name="Azure Synapse Analytics",
+                    rationale="Unified data warehouse/lakehouse service for SQL, Spark, and data explorer workloads.",
+                    configuration=ServiceConfiguration(
+                        sku="DWU100c",
+                        additional_settings={
+                            "workspace_mode": "Lakehouse",
+                            "linked_storage": "Azure Data Lake Storage Gen2",
+                        }
+                    ),
+                    alternatives=["Azure Databricks", "Azure SQL Database Hyperscale"],
+                    estimated_monthly_cost=250.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in spark_keywords) or "databricks" in existing_lower:
+            _add(
+                ServiceSelection(
+                    category="data",
+                    service_name="Azure Databricks",
+                    rationale="Collaborative Apache Spark platform with Delta Lake and MLflow for notebook-driven analytics.",
+                    configuration=ServiceConfiguration(
+                        sku="Premium",
+                        additional_settings={
+                            "photon_enabled": True,
+                            "autoscale": {"min_workers": 2, "max_workers": 8},
+                        }
+                    ),
+                    alternatives=["Synapse Spark", "Self-managed Spark on AKS"],
+                    estimated_monthly_cost=300.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in governance_keywords) or "purview" in existing_lower:
+            _add(
+                ServiceSelection(
+                    category="data",
+                    service_name="Microsoft Purview",
+                    rationale="Provides automated data discovery, cataloging, and lineage to satisfy governance mandates.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "scan_scope": ["Synapse", "Data Lake"],
+                            "classifications": ["PII", "Financial"],
+                        }
+                    ),
+                    alternatives=["Custom data catalog"],
+                    estimated_monthly_cost=30.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in telemetry_keywords) or "data explorer" in existing_lower:
+            _add(
+                ServiceSelection(
+                    category="data",
+                    service_name="Azure Data Explorer",
+                    rationale="Optimized Kusto analytics cluster for log/telemetry workloads requiring sub-second query latency.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "cluster_size": "Standard_D13_v2",
+                            "ingestion_batching_seconds": 60,
+                        }
+                    ),
+                    alternatives=["Azure Synapse Data Explorer pool"],
+                    estimated_monthly_cost=120.0,
+                )
+            )
+
+        return services
+
+    def _select_streaming_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Select streaming ingestion and IoT services."""
+        services: List[ServiceSelection] = []
+        added: set[str] = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+
+        streaming_keywords = ["event hub", "kafka", "stream", "real-time", "telemetry", "clickstream"]
+        analytics_keywords = ["stream analytics", "cep", "windowing", "real-time dashboard"]
+        iot_keywords = ["iot", "device", "sensor", "edge", "telemetry upload"]
+
+        if any(keyword in normalized_text for keyword in streaming_keywords):
+            _add(
+                ServiceSelection(
+                    category="streaming",
+                    service_name="Azure Event Hubs",
+                    rationale="High-throughput event ingestion layer compatible with Kafka and Azure ecosystem services.",
+                    configuration=ServiceConfiguration(
+                        sku="Standard",
+                        additional_settings={
+                            "partitions": 4,
+                            "capture": True,
+                        }
+                    ),
+                    alternatives=["Kafka on HDInsight", "Service Bus"],
+                    estimated_monthly_cost=80.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in analytics_keywords):
+            _add(
+                ServiceSelection(
+                    category="streaming",
+                    service_name="Azure Stream Analytics",
+                    rationale="Serverless query engine for transforming Event Hubs telemetry into dashboards or storage.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "inputs": ["Event Hubs"],
+                            "outputs": ["Power BI", "Data Lake"],
+                            "compatibility_level": "1.2",
+                        }
+                    ),
+                    alternatives=["Apache Flink on HDInsight"],
+                    estimated_monthly_cost=45.0,
+                )
+            )
+
+        if any(keyword in normalized_text for keyword in iot_keywords):
+            _add(
+                ServiceSelection(
+                    category="streaming",
+                    service_name="Azure IoT Hub",
+                    rationale="Provides secure device provisioning, bi-directional messaging, and integration with Event Hubs for IoT workloads.",
+                    configuration=ServiceConfiguration(
+                        sku="S1",
+                        additional_settings={
+                            "daily_messages_per_device": 4000,
+                            "iot_edge": True,
+                        }
+                    ),
+                    alternatives=["Azure IoT Central"],
+                    estimated_monthly_cost=25.0,
+                )
+            )
+
+        return services
+
+    def _select_search_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Add Azure AI Search when semantic/vector search is required."""
+        services: List[ServiceSelection] = []
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+        constraints = requirements.technical_constraints or TechnicalConstraints()
+        preferred_lower = [tech.lower() for tech in getattr(constraints, "preferred_technologies", [])]
+
+        search_keywords = ["search", "semantic", "vector", "retrieval", "knowledge base", "cognitive search"]
+        needs_search = any(keyword in normalized_text for keyword in search_keywords) or any(
+            "search" in tech for tech in preferred_lower
+        )
+
+        if needs_search:
+            services.append(
+                ServiceSelection(
+                    category="ai",
+                    service_name="Azure AI Search",
+                    rationale="Provides vector + semantic search over ingested content to ground Azure OpenAI responses.",
+                    configuration=ServiceConfiguration(
+                        sku="Standard S1",
+                        replicas=2,
+                        additional_settings={
+                            "partitions": 2,
+                            "vector_search_enabled": True,
+                        }
+                    ),
+                    alternatives=["Cosmos DB full-text search"],
+                    estimated_monthly_cost=120.0,
+                )
+            )
+
+        return services
+    
     def _select_networking_services(
         self, requirements: RequirementsOutput
     ) -> List[ServiceSelection]:
@@ -1203,6 +1871,350 @@ Design a complete architecture and provide the JSON response with all sections f
                 )
             )
         
+        return services
+
+    def _select_integration_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Select Azure integration services (APIM, Service Bus, Event Grid)."""
+        services: List[ServiceSelection] = []
+        added = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+
+        api_keywords = ["api management", "developer portal", "external api", "partner api", "monetize api"]
+        public_api_signal = any(keyword in normalized_text for keyword in api_keywords)
+        if not public_api_signal:
+            public_api_signal = "api" in normalized_text and any(
+                kw in normalized_text for kw in ["throttle", "subscription", "partner", "public", "multi-tenant"]
+            )
+
+        if public_api_signal:
+            _add(
+                ServiceSelection(
+                    category="integration",
+                    service_name="Azure API Management",
+                    rationale="Managed gateway and developer portal for partner/public APIs with throttling, policies, and analytics.",
+                    configuration=ServiceConfiguration(
+                        sku="Premium" if self._needs_global(requirements) else "Standard",
+                        additional_settings={
+                            "policies": ["rate_limit", "jwt_validation"],
+                            "developer_portal": True,
+                            "self_hosted_gateway": self._needs_global(requirements)
+                        }
+                    ),
+                    alternatives=["Custom API gateway"],
+                    estimated_monthly_cost=180.0,
+                )
+            )
+
+        messaging_keywords = [
+            "service bus",
+            "message queue",
+            "topic",
+            "pub/sub",
+            "asynchronous orders",
+            "saga",
+            "event-driven integration",
+        ]
+        needs_service_bus = any(keyword in normalized_text for keyword in messaging_keywords)
+        if needs_service_bus:
+            _add(
+                ServiceSelection(
+                    category="integration",
+                    service_name="Azure Service Bus",
+                    rationale="Enterprise messaging with queues and topics for decoupled microservices and partner integrations.",
+                    configuration=ServiceConfiguration(
+                        sku="Premium" if self._needs_global(requirements) else "Standard",
+                        additional_settings={
+                            "features": ["sessions", "dead_letter", "auto_forward"],
+                            "namespace_zone_redundant": self._needs_ha(requirements)
+                        }
+                    ),
+                    alternatives=["Azure Storage Queues"],
+                    estimated_monthly_cost=75.0,
+                )
+            )
+
+        event_keywords = [
+            "event grid",
+            "webhook",
+            "event subscription",
+            "notify downstream",
+            "emit events",
+        ]
+        if any(keyword in normalized_text for keyword in event_keywords):
+            _add(
+                ServiceSelection(
+                    category="integration",
+                    service_name="Azure Event Grid",
+                    rationale="Serverless event routing to push notifications to downstream systems via webhooks or Azure Functions.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "event_sources": ["Blob Storage", "Service Bus"],
+                            "retry_policy": {"max_attempts": 30, "event_ttl_minutes": 1440}
+                        }
+                    ),
+                    alternatives=["Custom webhook dispatcher"],
+                    estimated_monthly_cost=20.0,
+                )
+            )
+
+        return services
+
+    def _select_security_enhancements(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Add Azure Firewall, DDoS, Bastion, and Defender when compliance/security requires it."""
+        services: List[ServiceSelection] = []
+        added = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        security = requirements.non_functional_requirements.security or {}
+        compliance = [c.lower() for c in requirements.non_functional_requirements.compliance or []]
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+
+        sensitive_frameworks = {"hipaa", "pci", "sox", "gdpr", "fedramp", "nist", "ccpa"}
+        requires_strict_isolation = bool(security.get("network_isolation")) or any(
+            framework in sensitive_frameworks for framework in compliance
+        ) or "zero trust" in normalized_text
+
+        if requires_strict_isolation:
+            _add(
+                ServiceSelection(
+                    category="networking",
+                    service_name="Azure Firewall",
+                    rationale="Stateful firewall-as-a-service enforcing zero-trust segmentation and outbound control for regulated workloads.",
+                    configuration=ServiceConfiguration(
+                        sku="Premium",
+                        additional_settings={
+                            "threat_intelligence_mode": "AlertAndDeny",
+                            "dns_proxy": True,
+                            "policy_hub_spoke": True,
+                        }
+                    ),
+                    alternatives=["NVA-based firewall"],
+                    estimated_monthly_cost=100.0,
+                )
+            )
+
+        if requires_strict_isolation or self._needs_global(requirements):
+            _add(
+                ServiceSelection(
+                    category="networking",
+                    service_name="Azure DDoS Protection",
+                    rationale="Provides adaptive DDoS mitigation for public endpoints to satisfy enterprise security baselines.",
+                    configuration=ServiceConfiguration(
+                        sku="Standard",
+                        additional_settings={"protected_virtual_networks": 1}
+                    ),
+                    alternatives=["Rely on basic platform DDoS"],
+                    estimated_monthly_cost=35.0,
+                )
+            )
+
+        if security.get("private_admin_access") or any(
+            keyword in normalized_text for keyword in ["bastion", "jump host", "private ssh", "rdp"]
+        ):
+            _add(
+                ServiceSelection(
+                    category="networking",
+                    service_name="Azure Bastion",
+                    rationale="Provides browser-based RDP/SSH over private IP addresses without exposing jump boxes to the internet.",
+                    configuration=ServiceConfiguration(
+                        sku="Standard",
+                        additional_settings={"session_recording": True}
+                    ),
+                    alternatives=["Public jump box VM (NOT RECOMMENDED)"],
+                    estimated_monthly_cost=74.0,
+                )
+            )
+
+        if compliance or security:
+            _add(
+                ServiceSelection(
+                    category="security",
+                    service_name="Microsoft Defender for Cloud",
+                    rationale="Enables CSPM, regulatory compliance dashboards, and threat detection across Azure resources.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "regulatory_compliance": compliance or ["Azure CIS"],
+                            "defender_plans": ["App Service", "SQL", "Storage"]
+                        }
+                    ),
+                    alternatives=["Manual compliance tracking"],
+                    estimated_monthly_cost=50.0,
+                )
+            )
+
+        return services
+
+    def _select_resiliency_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Add Azure Backup/Site Recovery when RPO/RTO targets require it."""
+        services: List[ServiceSelection] = []
+        added = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        availability = requirements.non_functional_requirements.availability or {}
+        rpo = self._parse_time_value(availability.get("rpo_minutes")) if availability else None
+        rto = self._parse_time_value(availability.get("rto_minutes")) if availability else None
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+        dr_keywords = ["disaster recovery", "dr", "failover", "backup", "active-active", "active-passive"]
+        mentions_dr = any(keyword in normalized_text for keyword in dr_keywords)
+
+        needs_backup = mentions_dr or (rpo is not None and rpo <= 60)
+        if needs_backup:
+            _add(
+                ServiceSelection(
+                    category="resiliency",
+                    service_name="Azure Backup",
+                    rationale="Policy-based backups for databases, VMs, and files to meet RPO targets.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "backup_frequency_hours": 24 if rpo and rpo <= 60 else 48,
+                            "retention_days": 30,
+                            "immutable_vault": True,
+                        }
+                    ),
+                    alternatives=["Manual scripts"],
+                    estimated_monthly_cost=40.0,
+                )
+            )
+
+        needs_site_recovery = (
+            (rpo is not None and rpo <= 15)
+            or (rto is not None and rto <= 60)
+            or self._needs_global(requirements)
+            or "site recovery" in normalized_text
+        )
+        if needs_site_recovery:
+            _add(
+                ServiceSelection(
+                    category="resiliency",
+                    service_name="Azure Site Recovery",
+                    rationale="Automates cross-region replication and orchestrated failover to satisfy low RPO/RTO targets.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "primary_region": requirements.region or self._get_default_region(CloudPlatform.AZURE),
+                            "secondary_region": "centralus",
+                            "test_failover_frequency_days": 90,
+                        }
+                    ),
+                    alternatives=["Manual DR runbooks"],
+                    estimated_monthly_cost=60.0,
+                )
+            )
+
+        return services
+
+    def _select_management_services(
+        self, requirements: RequirementsOutput
+    ) -> List[ServiceSelection]:
+        """Select governance, configuration, and automation services."""
+        services: List[ServiceSelection] = []
+        added: set[str] = set()
+
+        def _add(selection: ServiceSelection):
+            if selection.service_name not in added:
+                services.append(selection)
+                added.add(selection.service_name)
+
+        text_sections = [
+            ' '.join(requirements.functional_requirements or []),
+            ' '.join(requirements.implied_requirements or []),
+            requirements.current_understanding or "",
+            requirements.source_user_input or "",
+        ]
+        normalized_text = ' '.join(section for section in text_sections if section).lower()
+        security = requirements.non_functional_requirements.security or {}
+        compliance = [c.lower() for c in requirements.non_functional_requirements.compliance or []]
+
+        feature_flag_keywords = ["feature flag", "feature toggle", "config store", "multi-environment config"]
+        policy_keywords = ["policy", "governance", "standard", "compliance guardrail"]
+        automation_keywords = ["runbook", "patch", "automation", "schedule", "update management"]
+
+        if any(keyword in normalized_text for keyword in feature_flag_keywords):
+            _add(
+                ServiceSelection(
+                    category="management",
+                    service_name="Azure App Configuration",
+                    rationale="Provides centralized configuration and feature flag management for multi-environment deployments.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "feature_flags": True,
+                            "key_vault_reference": True,
+                        }
+                    ),
+                    alternatives=["Config files in source control"],
+                    estimated_monthly_cost=10.0,
+                )
+            )
+
+        if compliance or any(keyword in normalized_text for keyword in policy_keywords):
+            _add(
+                ServiceSelection(
+                    category="management",
+                    service_name="Azure Policy",
+                    rationale="Applies Azure policies/initiatives to enforce regulatory guardrails across subscriptions and resource groups.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "initiatives": compliance or ["Azure Security Benchmark"],
+                            "deploy_if_not_exists": True,
+                        }
+                    ),
+                    alternatives=["Manual governance spreadsheets"],
+                    estimated_monthly_cost=0.0,
+                )
+            )
+
+        if security.get("patching") or any(keyword in normalized_text for keyword in automation_keywords):
+            _add(
+                ServiceSelection(
+                    category="management",
+                    service_name="Azure Automation",
+                    rationale="Delivers runbooks and update management to patch VMs/workloads without manual intervention.",
+                    configuration=ServiceConfiguration(
+                        additional_settings={
+                            "update_management": True,
+                            "hybrid_worker": True,
+                        }
+                    ),
+                    alternatives=["Manual patch cadence"],
+                    estimated_monthly_cost=15.0,
+                )
+            )
+
         return services
     
     def _add_redis_cache(self) -> ServiceSelection:

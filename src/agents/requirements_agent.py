@@ -450,7 +450,7 @@ Extract all requirements and respond with the JSON structure specified in your i
                 "compliance",
                 "Are there regulatory or data residency requirements (HIPAA, PCI DSS, GDPR, CJIS, etc.)?",
                 "Security controls, encryption, and logging hinge on compliance scope.",
-                ["HIPAA", "PCI DSS", "GDPR", "None/unsure"],
+                ["HIPAA", "PCI DSS", "GDPR", "CJIS", "None / N/A", "Unsure"],
             )
 
         # Budget/timeline

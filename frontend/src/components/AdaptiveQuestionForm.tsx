@@ -4,6 +4,17 @@ import type { KGQuestion } from '../types-kg';
 import { DOMAIN_NAMES } from '../types-kg';
 import { kgAutofill } from '../api/kg-client';
 
+const DEFAULT_NA_OPTION = 'Not applicable / not relevant';
+
+const optionsWithNotApplicable = (options: string[]): string[] => {
+  const normalized = options.map((opt) => opt.trim().toLowerCase());
+  const hasExistingNA = normalized.some((opt) =>
+    opt.includes('not applicable') || opt.includes('not relevant') || opt === 'none' || opt === 'n/a'
+  );
+
+  return hasExistingNA ? options : [...options, DEFAULT_NA_OPTION];
+};
+
 interface AdaptiveQuestionFormProps {
   domain: string;
   questions: KGQuestion[];
@@ -114,6 +125,7 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
     const value = answers[question.field_name] ?? '';
 
     if (question.options) {
+      const selectOptions = optionsWithNotApplicable(question.options);
       // Dropdown/Select
       return (
         <select
@@ -127,7 +139,7 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
           disabled={isSubmitting || isAutoFilling}
         >
           <option value="">-- Select an option --</option>
-          {question.options.map((opt) => (
+          {selectOptions.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
             </option>
@@ -230,7 +242,7 @@ const AdaptiveQuestionForm: React.FC<AdaptiveQuestionFormProps> = ({
             type="button"
             onClick={handleAutoFill}
             disabled={isAutoFilling || isSubmitting}
-            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+            className="flex items-center space-x-2 px-4 py-2 bg-linear-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
           >
             {isAutoFilling ? (
               <>

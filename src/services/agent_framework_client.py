@@ -6,12 +6,30 @@ This module provides a high-level interface to the Microsoft Agent Framework,
 which combines Semantic Kernel and AutoGen patterns for agent development.
 """
 
-from typing import Optional, List
+from __future__ import annotations
+
+from typing import Optional, List, Any, TYPE_CHECKING
 import os
 
-from agent_framework import ChatAgent, HostedWebSearchTool
-from agent_framework.azure import AzureOpenAIChatClient
-from azure.identity import DefaultAzureCredential
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from agent_framework import ChatAgent, HostedWebSearchTool
+    from agent_framework.azure import AzureOpenAIChatClient
+    from azure.identity import DefaultAzureCredential
+else:  # pragma: no cover - runtime fallback for optional dependency
+    ChatAgent = HostedWebSearchTool = AzureOpenAIChatClient = Any  # type: ignore[assignment]
+    DefaultAzureCredential = Any  # type: ignore[assignment]
+
+try:  # pragma: no cover - import side effects only
+    from agent_framework import ChatAgent as _ChatAgentRuntime, HostedWebSearchTool as _HostedWebSearchToolRuntime
+    from agent_framework.azure import AzureOpenAIChatClient as _AzureOpenAIChatClientRuntime
+    from azure.identity import DefaultAzureCredential as _DefaultAzureCredentialRuntime
+    ChatAgent = _ChatAgentRuntime  # type: ignore[assignment]
+    HostedWebSearchTool = _HostedWebSearchToolRuntime  # type: ignore[assignment]
+    AzureOpenAIChatClient = _AzureOpenAIChatClientRuntime  # type: ignore[assignment]
+    DefaultAzureCredential = _DefaultAzureCredentialRuntime  # type: ignore[assignment]
+    _AGENT_FRAMEWORK_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover - handled at runtime/test environments
+    _AGENT_FRAMEWORK_AVAILABLE = False
 
 
 class AgentFrameworkClient:
@@ -34,6 +52,12 @@ class AgentFrameworkClient:
         Uses DefaultAzureCredential for authentication (supports Azure CLI,
         managed identity, service principal, etc.)
         """
+        if not _AGENT_FRAMEWORK_AVAILABLE:
+            raise ModuleNotFoundError(
+                "The 'agent_framework' package is required to instantiate AgentFrameworkClient. "
+                "Install the Microsoft Agent Framework SDK in the active environment."
+            )
+
         # Azure OpenAI configuration
         self.openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         if not self.openai_endpoint:
@@ -59,22 +83,21 @@ class AgentFrameworkClient:
         instructions: str,
         enable_bing: bool = False,
         model: Optional[str] = None,
-    ) -> ChatAgent:
-        """
-        Create a ChatAgent with specified configuration.
-        
+    ) -> Any:
+        """Create a ChatAgent with specified configuration.
+
         Args:
             name: Agent name/identifier
             instructions: System prompt that defines the agent's behavior
             enable_bing: Whether to enable Bing Grounding for web search
             model: Optional model override (defaults to MODEL_DEPLOYMENT_NAME)
-            
+
         Returns:
             ChatAgent: Configured agent instance ready for execution
-            
+
         Raises:
             ValueError: If Bing is enabled but BING_CONNECTION_ID is not set
-            
+
         Example:
             >>> client = AgentFrameworkClient()
             >>> agent = client.create_agent(
@@ -116,7 +139,7 @@ class AgentFrameworkClient:
         
         return agent
     
-    def get_chat_client(self) -> AzureOpenAIChatClient:
+    def get_chat_client(self) -> Any:
         """
         Get the underlying Azure OpenAI chat client.
         
